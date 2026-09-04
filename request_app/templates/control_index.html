@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#080d16">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>penczREQ Control</title>
+  <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', path='/control.css') }}?v={{ app_version }}">
+</head>
+<body class="control-app">
+  <header class="control-header">
+    <div class="control-brand"><span class="control-mark small">Pr</span><div><strong>penczREQ Control</strong><span>{{ t("lokalne centrum zarządzania") }}</span></div></div>
+    <div class="control-header-actions">
+      <span class="local-chip">{{ t("Tylko LAN") }}</span>
+      <span class="control-username">{{ control_user.username }}</span>
+      <form class="language-switch" method="post" action="/language" aria-label="{{ t('Język') }}">
+        <input type="hidden" name="next" value="/">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" name="language" value="en" {% if language == 'en' %}class="active" aria-current="true"{% endif %}>EN</button><span aria-hidden="true">|</span><button type="submit" name="language" value="pl" {% if language == 'pl' %}class="active" aria-current="true"{% endif %}>PL</button>
+      </form>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="control-button ghost" type="submit">{{ t("Wyloguj") }}</button>
+      </form>
+    </div>
+  </header>
+
+  <div class="control-layout">
+    <nav class="control-nav" aria-label="{{ t('Sekcje panelu') }}">
+      <button class="active" type="button" data-control-tab="overview">{{ t("Przegląd") }}</button>
+      <button type="button" data-control-tab="security">{{ t("Blokady i logi") }}</button>
+      <button type="button" data-control-tab="users">{{ t("Konta publiczne") }}</button>
+      <button type="button" data-control-tab="configuration">{{ t("Konfiguracja") }}</button>
+      <button type="button" data-control-tab="maintenance">{{ t("Kopie i integralność") }}</button>
+      <button type="button" data-control-tab="account">{{ t("Konto Control") }}</button>
+    </nav>
+
+    <main class="control-main">
+      <div id="control-toast" class="control-toast" role="status" aria-live="polite" hidden></div>
+
+      <section class="control-section active" data-control-section="overview">
+        <div class="control-title"><div><p class="control-kicker">{{ t("Stan systemu") }}</p><h1>{{ t("Przegląd bezpieczeństwa") }}</h1></div><button class="control-button" type="button" data-refresh-all>{{ t("Odśwież") }}</button></div>
+        <div class="overview-grid" id="overview-grid"><div class="control-loading">{{ t("Wczytywanie…") }}</div></div>
+        <article class="control-panel warning-panel" data-bootstrap-warning hidden>
+          <h2>{{ t("Pozostał plik z hasłem startowym") }}</h2>
+          <p>{{ t("Zmień hasło panelu. Po poprawnej zmianie plik jednorazowy zostanie automatycznie usunięty.") }}</p>
+        </article>
+        <article class="control-panel">
+          <h2>{{ t("Granice bezpieczeństwa") }}</h2>
+          <ul class="security-boundaries">
+            <li>{{ t("Panel przyjmuje połączenia tylko z dozwolonych sieci lokalnych.") }}</li>
+            <li>{{ t("Nie posiada dostępu do API TrueNAS, Dockera ani konfiguracji Caddy.") }}</li>
+            <li>{{ t("Publiczna aplikacja i Control korzystają z różnych kont, sesji i cookies.") }}</li>
+            <li>{{ t("Zmiany krytyczne wymagają ponownego podania hasła Control.") }}</li>
+          </ul>
+        </article>
+      </section>
+
+      <section class="control-section" data-control-section="security">
+        <div class="control-title"><div><p class="control-kicker">{{ t("Ochrona logowania") }}</p><h1>{{ t("Blokady i zdarzenia") }}</h1></div></div>
+        <article class="control-panel reauth-panel">
+          <label>{{ t("Hasło Control do operacji na tej karcie") }}<input type="password" data-security-reauth maxlength="128" autocomplete="current-password"></label>
+          <p class="control-hint">{{ t("Pole jest czyszczone po każdej operacji.") }}</p>
+        </article>
+        <article class="control-panel">
+          <div class="panel-heading"><div><h2>{{ t("Adresy IP i loginy") }}</h2><p>{{ t("Automatyczne wpisy ochrony. Blokady IP wygasają najpóźniej po 24 godzinach.") }}</p></div><button class="control-button" type="button" data-load-throttles>{{ t("Odśwież") }}</button></div>
+          <div id="throttle-list" class="control-list"><div class="control-loading">{{ t("Wczytywanie…") }}</div></div>
+        </article>
+        <article class="control-panel">
+          <div class="panel-heading"><div><h2>{{ t("Dziennik bezpieczeństwa") }}</h2><p>{{ t("Bez haseł, cookies, tokenów i treści żądań.") }}</p></div><button class="control-button" type="button" data-load-events>{{ t("Odśwież") }}</button></div>
+          <div id="event-list" class="event-list"><div class="control-loading">{{ t("Wczytywanie…") }}</div></div>
+        </article>
+      </section>
+
+      <section class="control-section" data-control-section="users">
+        <div class="control-title"><div><p class="control-kicker">{{ t("Aplikacja publiczna") }}</p><h1>{{ t("Konta użytkowników") }}</h1></div></div>
+        <div class="control-two-column">
+          <article class="control-panel">
+            <h2>{{ t("Nowe konto") }}</h2>
+            <form id="control-create-user" class="control-form">
+              <label>{{ t("Login") }}<input name="username" required minlength="3" maxlength="32" pattern="[a-z0-9][a-z0-9._-]{2,31}"></label>
+              <label>{{ t("Hasło tymczasowe") }}<input type="password" name="temporary_password" required minlength="15" maxlength="128" autocomplete="new-password"></label>
+              <label>{{ t("Hasło Control") }}<input type="password" name="current_password" required maxlength="128" autocomplete="current-password"></label>
+              <button class="control-button primary" type="submit">{{ t("Utwórz użytkownika") }}</button>
+            </form>
+          </article>
+          <article class="control-panel reauth-panel">
+            <h2>{{ t("Potwierdzanie operacji") }}</h2>
+            <label>{{ t("Hasło Control") }}<input type="password" data-users-reauth maxlength="128" autocomplete="current-password"></label>
+            <p class="control-hint">{{ t("Wymagane przy blokowaniu lub trwałym usuwaniu konta, resecie hasła, zmianie loginu, sesji i przekazaniu administratora.") }}</p>
+          </article>
+        </div>
+        <article class="control-panel">
+          <div class="panel-heading"><h2>{{ t("Istniejące konta") }}</h2><button class="control-button" type="button" data-load-users>{{ t("Odśwież") }}</button></div>
+          <div id="control-users-list" class="control-list"><div class="control-loading">{{ t("Wczytywanie…") }}</div></div>
+        </article>
+        <article class="control-panel">
+          <h2>{{ t("Powiadomienie dla wszystkich") }}</h2>
+          <form id="control-broadcast" class="control-form horizontal-form">
+            <label>{{ t("Tytuł (EN)") }}<input name="title_en" required maxlength="100" lang="en"></label>
+            <label class="wide-field">{{ t("Treść (EN)") }}<textarea name="body_en" required maxlength="1000" rows="3" lang="en"></textarea></label>
+            <label>{{ t("Tytuł (PL)") }}<input name="title_pl" required maxlength="100" lang="pl"></label>
+            <label class="wide-field">{{ t("Treść (PL)") }}<textarea name="body_pl" required maxlength="1000" rows="3" lang="pl"></textarea></label>
+            <label>{{ t("Hasło Control") }}<input type="password" name="current_password" required maxlength="128" autocomplete="current-password"></label>
+            <button class="control-button primary" type="submit">{{ t("Wyślij") }}</button>
+          </form>
+        </article>
+      </section>
+
+      <section class="control-section" data-control-section="configuration">
+        <div class="control-title"><div><p class="control-kicker">{{ t("Sekrety i sieć") }}</p><h1>{{ t("Konfiguracja aplikacji") }}</h1></div></div>
+        <article class="control-panel">
+          <form id="control-settings-form" class="control-form settings-form">
+            <div class="form-block">
+              <h2>TMDB</h2>
+              <p class="control-hint" data-tmdb-state>{{ t("Sprawdzanie konfiguracji…") }}</p>
+              <label>{{ t("Nowy API Read Access Token") }}<input type="password" name="tmdb_token" maxlength="4096" autocomplete="off" placeholder="{{ t('Pozostaw puste, aby nie zmieniać') }}"></label>
+              <button class="control-button" type="button" data-test-tmdb>{{ t("Przetestuj token") }}</button>
+            </div>
+            <div class="form-block">
+              <h2>{{ t("Publiczny adres") }}</h2>
+              <label>APP_BASE_URL<input type="url" name="public_base_url" required maxlength="500"></label>
+              <p class="control-hint">{{ t("Przykład: https://requests.example.com") }}</p>
+            </div>
+            <div class="form-block">
+              <h2>{{ t("Dodatkowe / ręcznie zaufane reverse proxy") }}</h2>
+              <label>{{ t("Ręczne adresy IP lub CIDR") }}<textarea name="known_proxies" maxlength="1000" rows="4" placeholder="{{ t('np. 172.20.0.5/32') }}"></textarea></label>
+              <p class="control-hint">{{ t("Automatycznie wykrywane proxy środowiska nie jest zapisywane w tym polu. Ręczna zmiana obowiązuje po restarcie Public.") }}</p>
+              <p class="control-hint">{{ t("Nigdy nie wpisuj 0.0.0.0/0 ani ::/0. Aplikacja nie modyfikuje Caddy.") }}</p>
+            </div>
+            <div class="form-block split-inputs">
+              <h2>{{ t("Retencja") }}</h2>
+              <label>{{ t("Logi bezpieczeństwa — dni") }}<input type="number" name="security_log_retention_days" min="7" max="365" required></label>
+              <label>{{ t("Kopie bazy — dni") }}<input type="number" name="backup_retention_days" min="3" max="365" required></label>
+            </div>
+            <div class="form-block critical-confirm">
+              <h2>{{ t("Zatwierdzenie") }}</h2>
+              <label>{{ t("Hasło Control") }}<input type="password" name="current_password" required maxlength="128" autocomplete="current-password"></label>
+              <button class="control-button primary" type="submit">{{ t("Sprawdź i zapisz konfigurację") }}</button>
+            </div>
+          </form>
+        </article>
+        <article class="control-panel">
+          <div class="panel-heading"><h2>{{ t("Historia ustawień") }}</h2><button class="control-button" type="button" data-load-settings-history>{{ t("Odśwież") }}</button></div>
+          <div id="settings-history-list" class="event-list"></div>
+        </article>
+      </section>
+
+      <section class="control-section" data-control-section="maintenance">
+        <div class="control-title"><div><p class="control-kicker">{{ t("Dane aplikacji") }}</p><h1>{{ t("Kopie i integralność") }}</h1></div></div>
+        <article class="control-panel maintenance-actions">
+          <div><h2>{{ t("Ręczna kopia online") }}</h2><p>{{ t("SQLite wykonuje spójną kopię bez zatrzymywania publicznej aplikacji.") }}</p></div>
+          <label>{{ t("Hasło Control") }}<input type="password" data-backup-reauth maxlength="128" autocomplete="current-password"></label>
+          <button class="control-button primary" type="button" data-create-backup>{{ t("Utwórz kopię teraz") }}</button>
+        </article>
+        <article class="control-panel">
+          <div class="panel-heading"><h2>{{ t("Dostępne kopie") }}</h2><button class="control-button" type="button" data-load-backups>{{ t("Odśwież") }}</button></div>
+          <div id="backup-list" class="control-list"></div>
+        </article>
+      </section>
+
+      <section class="control-section" data-control-section="account">
+        <div class="control-title"><div><p class="control-kicker">{{ t("Tożsamość lokalna") }}</p><h1>{{ t("Konto penczREQ Control") }}</h1></div></div>
+        <div class="control-two-column">
+          <article class="control-panel">
+            <h2>{{ t("Zmień login panelu") }}</h2>
+            <form id="control-username-form" class="control-form">
+              <label>{{ t("Nowy login") }}<input name="username" required minlength="3" maxlength="32" value="{{ control_user.username }}"></label>
+              <label>{{ t("Obecne hasło") }}<input type="password" name="current_password" required maxlength="128" autocomplete="current-password"></label>
+              <button class="control-button" type="submit">{{ t("Zmień login") }}</button>
+            </form>
+          </article>
+          <article class="control-panel">
+            <h2>{{ t("Zmień hasło panelu") }}</h2>
+            <form id="control-password-form" class="control-form">
+              <label>{{ t("Obecne hasło") }}<input type="password" name="current_password" required maxlength="128" autocomplete="current-password"></label>
+              <label>{{ t("Nowe hasło") }}<input type="password" name="new_password" required minlength="15" maxlength="128" autocomplete="new-password"></label>
+              <label>{{ t("Powtórz nowe hasło") }}<input type="password" name="confirm_password" required minlength="15" maxlength="128" autocomplete="new-password"></label>
+              <p class="control-hint">{{ t("Zmiana hasła zakończy wszystkie sesje Control.") }}</p>
+              <button class="control-button primary" type="submit">{{ t("Zmień hasło") }}</button>
+            </form>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="user-action-dialog" class="control-dialog">
+    <form method="dialog" class="dialog-card">
+      <h2 data-user-dialog-title>{{ t("Operacja na koncie") }}</h2>
+      <p data-user-dialog-description></p>
+      <label data-user-dialog-input-wrap hidden><span data-user-dialog-label></span><input data-user-dialog-input maxlength="128" disabled></label>
+      <div class="dialog-actions"><button class="control-button" value="cancel" formnovalidate>{{ t("Anuluj") }}</button><button class="control-button primary" value="confirm" data-user-dialog-confirm>{{ t("Potwierdź") }}</button></div>
+    </form>
+  </dialog>
+
+  <div id="i18n-config" data-language="{{ language }}" data-strict="{{ '1' if app_env != 'production' else '0' }}" data-translations="{{ client_translations | tojson | forceescape }}" hidden></div>
+  <script src="{{ url_for('static', path='/control.js') }}?v={{ app_version }}" defer></script>
+</body>
+</html>

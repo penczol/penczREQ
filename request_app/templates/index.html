@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-top">
+  <div class="tabs" role="tablist" aria-label="{{ t('Listy') }}">
+    <button class="tab active" type="button" data-state="active" data-mobile-label="{{ t('Requesty') }}" role="tab">{{ t("Requesty") }} <span class="count-badge" data-count="active">0</span></button>
+    <button class="tab" type="button" data-state="upcoming" data-mobile-label="{{ t('Premiery') }}" role="tab">{{ t("Przed premierą") }} <span class="count-badge" data-count="upcoming">0</span></button>
+    <button class="tab" type="button" data-state="completed" data-mobile-label="{{ t('Gotowe') }}" role="tab">{{ t("Zrealizowane") }} <span class="count-badge" data-count="completed">0</span></button>
+  </div>
+  {% if not is_admin %}<button class="button primary" type="button" data-open-search>{{ t("+ Dodaj request") }}</button>{% endif %}
+</section>
+
+<section class="toolbar" data-active-toolbar>
+  <label data-status-control>{{ t("Status") }}<select data-status-filter><option value="all">{{ t("Wszystkie") }}</option><option value="pending">{{ t("Oczekujący") }}</option><option value="translation">{{ t("W oczekiwaniu na premierę Blu-ray/VOD") }}</option><option value="in_progress">{{ t("W trakcie realizacji") }}</option><option value="missing">{{ t("Aktualnie brak źródła") }}</option></select></label>
+  <label>{{ t("Sortowanie") }}<select data-sort><option value="newest">{{ t("Data dodania — najnowsze") }}</option><option value="oldest">{{ t("Data dodania — najstarsze") }}</option><option value="likes_desc">{{ t("Like — malejąco") }}</option><option value="likes_asc">{{ t("Like — rosnąco") }}</option><option value="status">{{ t("Status") }}</option></select></label>
+</section>
+
+<p class="section-note" data-section-note></p>
+<nav class="request-pagination" data-request-pagination hidden aria-label="{{ t('Paginacja listy requestów') }}">
+  <label class="pagination-page-size"><span class="pagination-page-size-label">{{ t("Na stronie") }}</span><select data-page-size aria-label="{{ t('Liczba pozycji na stronie') }}"><option value="25" selected>25</option><option value="50">50</option><option value="100">100</option></select></label>
+  <button class="button pagination-direction pagination-previous" type="button" data-page-direction="previous" aria-label="{{ t('Poprzednia strona') }}"><span class="pagination-direction-desktop">{{ t("Poprzednia") }}</span><span class="pagination-direction-mobile" aria-hidden="true">‹</span></button>
+  <span class="pagination-summary" data-page-summary aria-live="polite"><span data-page-summary-desktop>{{ t("Strona 1 z 1 · 0 pozycji") }}</span><span class="pagination-summary-mobile" data-page-summary-mobile>1/1 · 0</span></span>
+  <button class="button pagination-direction pagination-next" type="button" data-page-direction="next" aria-label="{{ t('Następna strona') }}"><span class="pagination-direction-desktop">{{ t("Następna") }}</span><span class="pagination-direction-mobile" aria-hidden="true">›</span></button>
+</nav>
+<section id="request-list" class="request-list" aria-live="polite"></section>
+
+<dialog id="search-dialog" class="modal">
+  <div class="modal-head"><h2>{{ t("Znajdź film lub serial") }}</h2><button class="icon-button" type="button" data-close-dialog aria-label="{{ t('Zamknij') }}">×</button></div>
+  <form id="search-form" class="search-form">
+    <label>{{ t("Tytuł") }}<input type="search" name="query" minlength="2" placeholder="{{ t('Tytuł polski lub oryginalny') }}" required autofocus></label>
+    <button class="button primary" type="submit">{{ t("Szukaj") }}</button>
+  </form>
+  <div id="search-results" class="search-results"></div>
+</dialog>
+
+{% if is_admin %}
+<dialog id="delete-dialog" class="modal compact-modal">
+  <div class="modal-head"><h2>{{ t("Trwałe usunięcie requestu") }}</h2><button class="icon-button" type="button" data-close-dialog aria-label="{{ t('Zamknij') }}">×</button></div>
+  <form id="delete-form" class="stack-form">
+    <p>{{ t("Usuwasz:") }} <strong data-delete-title></strong></p>
+    <p class="hint">{{ t("Zainteresowani otrzymają powiadomienie z podanym powodem.") }}</p>
+    <label>{{ t("Powód usunięcia") }}<textarea name="reason" required maxlength="500" rows="4" placeholder="{{ t('Powód jest wymagany') }}"></textarea></label>
+    <div class="modal-actions"><button class="button" type="button" data-close-dialog>{{ t("Anuluj") }}</button><button class="button danger" type="submit">{{ t("Usuń request") }}</button></div>
+  </form>
+</dialog>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<div id="request-app-config" data-is-admin="{{ '1' if is_admin else '0' }}" hidden></div>
+<script src="{{ url_for('static', path='/app.js') }}?v={{ app_version }}" defer></script>
+{% endblock %}

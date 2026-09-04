@@ -1,0 +1,77 @@
+/* v0.3.0: service icons and denser desktop metadata. */
+
+.service-link {
+  min-width: 36px;
+  height: 27px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(13, 18, 25, .82);
+  transition: border-color .18s, background .18s, transform .18s;
+}
+
+.service-link:hover,
+.service-link:focus-visible {
+  border-color: rgba(155, 140, 255, .48);
+  background: rgba(119, 103, 243, .11);
+  transform: translateY(-1px);
+}
+
+.service-link img {
+  display: block;
+  width: auto;
+  height: 14px;
+}
+
+.service-link.tmdb {
+  min-width: 45px;
+}
+
+.id-copy-button {
+  white-space: nowrap;
+}
+
+.request-card-v02 .card-meta-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.request-card-v02 .card-meta-row .card-facts {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.request-card-v02 .card-meta-row .admin-meta {
+  flex: 1 1 auto;
+  align-items: center;
+  margin: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--line-soft);
+}
+
+@media (max-width: 680px) {
+  /* Keep the already approved mobile card layout exactly as before. */
+  .request-card-v02 .card-meta-row {
+    display: contents;
+  }
+
+  .request-card-v02 .card-meta-row .card-facts {
+    margin: 5px 0 0;
+  }
+
+  .request-card-v02 .card-meta-row .admin-meta {
+    margin: 6px 0 0;
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .service-link {
+    height: 26px;
+  }
+}

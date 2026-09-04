@@ -1,0 +1,43 @@
+.request-season-group {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.request-season-group > .season-tabs {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 5px 9px;
+  border-bottom: 0;
+  border-radius: 13px 13px 0 0;
+  background: linear-gradient(180deg, rgba(24, 31, 42, .96), rgba(15, 21, 29, .96));
+}
+
+.request-season-group > .request-card {
+  width: 100%;
+  max-width: 100%;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+@media (max-width: 680px) {
+  .request-season-group {
+    overflow: hidden;
+    border-radius: 13px;
+  }
+
+  .request-season-group > .season-tabs {
+    min-width: 0;
+    padding: 6px 7px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .request-season-group > .request-card.request-card-v02 {
+    border-radius: 0 0 13px 13px;
+  }
+}

@@ -1,0 +1,106 @@
+name: penczreq
+
+# Szablon jest renderowany przez installer.py. Nie wpisuj sekretów bezpośrednio
+# do Compose; oba pliki env powstają poza katalogiem aplikacji z trybem 0600.
+x-runtime: &runtime
+  image: REPLACE_IMAGE
+# REPLACE_PULL_POLICY_LINE
+  restart: unless-stopped
+  user: "568:568"
+  read_only: true
+  init: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+x-portals:
+  - name: Public
+    scheme: REPLACE_PUBLIC_PORTAL_SCHEME
+    host: REPLACE_PUBLIC_PORTAL_HOST
+    port: REPLACE_PUBLIC_PORTAL_PORT
+    path: /
+  - name: Control
+    scheme: REPLACE_CONTROL_PORTAL_SCHEME
+    host: REPLACE_CONTROL_PORTAL_HOST
+    port: REPLACE_CONTROL_PORTAL_PORT
+    path: /
+
+services:
+  control:
+    <<: *runtime
+    command:
+      - python
+      - -m
+      - request_app.server
+      - control
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    env_file:
+      - REPLACE_APP_ROOT/control.env
+    ports:
+      - REPLACE_BIND_IP:REPLACE_CONTROL_PORT:8001
+    volumes:
+      - type: bind
+        source: REPLACE_APP_ROOT/app
+        target: /data
+      - type: bind
+        source: REPLACE_APP_ROOT/control
+        target: /control-data
+      - type: bind
+        source: REPLACE_APP_ROOT/backups
+        target: /backups
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8001/internal/health", timeout=3)'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  public:
+    <<: *runtime
+    command:
+      - python
+      - -m
+      - request_app.server
+      - public
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    depends_on:
+      control:
+        condition: service_healthy
+    env_file:
+      - REPLACE_APP_ROOT/public.env
+    ports:
+      - REPLACE_BIND_IP:REPLACE_PUBLIC_PORT:8000
+    volumes:
+      - type: bind
+        source: REPLACE_APP_ROOT/app
+        target: /data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/internal/health", timeout=3)'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

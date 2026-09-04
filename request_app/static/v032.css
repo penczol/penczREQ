@@ -1,0 +1,52 @@
+/* v0.3.2: desktop cards end at the same height as their fixed 2:3 poster. */
+@media (min-width: 681px) {
+  .request-card-v02 .card-content {
+    grid-template-rows: auto auto auto minmax(29px, 1fr);
+    align-content: stretch;
+    padding: 7px 12px 6px;
+  }
+
+  .request-card-v02 .card-heading {
+    gap: 10px;
+  }
+
+  .request-card-v02 .card-kickers {
+    margin-bottom: 1px;
+    font-size: 8px;
+    line-height: 1.1;
+  }
+
+  .request-card-v02 h2 {
+    font-size: 17px;
+    line-height: 1.1;
+  }
+
+  .request-card-v02 .original-title {
+    margin-top: 2px;
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  .request-card-v02 .card-meta-row {
+    gap: 18px;
+    margin-top: 3px;
+  }
+
+  .request-card-v02 .card-meta-row .admin-meta {
+    padding-left: 18px;
+  }
+
+  .request-card-v02 .release-dates-grid {
+    margin-top: 4px;
+  }
+
+  .request-card-v02 .release-dates-grid > span {
+    padding: 4px 6px;
+  }
+
+  .request-card-v02 .card-actions {
+    align-self: end;
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+}

@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12.13"
+          cache: pip
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "24"
+      - name: Install locked test environment
+        run: |
+          python -m pip install --requirement requirements.lock
+          python -m pip install --requirement requirements-ci.lock
+          python -m pip check
+      - name: Run regression suite
+        run: python -m pytest -q
+      - name: Validate Python, JavaScript and shell sources
+        run: |
+          python -m compileall -q request_app tools tests
+          find request_app -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          bash -n deploy/truenas/install.sh tools/container-smoke.sh tools/inspect-image.sh
+      - name: Verify deterministic release artifacts
+        run: |
+          python tools/build_release_artifacts.py --output-dir dist/first
+          python tools/build_release_artifacts.py --output-dir dist/second
+          diff --recursive --brief dist/first dist/second
+
+  source-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12.13"
+          cache: pip
+      - name: Install audit tools
+        run: |
+          python -m pip install --requirement requirements-ci.lock
+          mkdir -p dist
+      - name: Audit Python dependencies
+        id: pip_audit
+        continue-on-error: true
+        run: python -m pip_audit --requirement requirements.lock --format json --output dist/pip-audit.json --strict
+      - name: Scan tracked files for secrets
+        id: secret_scan
+        continue-on-error: true
+        run: |
+          python -m detect_secrets scan --no-verify $(git ls-files) > dist/detect-secrets.json
+          python -c "import json,sys; data=json.load(open('dist/detect-secrets.json',encoding='utf-8')); findings=data.get('results',{}); print('detect-secrets files:', len(findings)); sys.exit(1 if findings else 0)"
+      - name: Run publication privacy gate
+        id: privacy_gate
+        continue-on-error: true
+        run: python tools/publication_gate.py --json-output dist/publication-gate.json
+      - name: Scan source and lockfiles with Trivy
+        id: trivy_source
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          format: json
+          output: dist/trivy-source.json
+          exit-code: "1"
+      - name: Scan configuration with Trivy
+        id: trivy_config
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          format: json
+          output: dist/trivy-config.json
+          exit-code: "1"
+      - name: Upload source audit reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: source-audit-reports
+          path: dist/*.json
+          if-no-files-found: error
+      - name: Enforce source audit result
+        if: always()
+        run: |
+          test "${{ steps.pip_audit.outcome }}" = success
+          test "${{ steps.secret_scan.outcome }}" = success
+          test "${{ steps.privacy_gate.outcome }}" = success
+          test "${{ steps.trivy_source.outcome }}" = success
+          test "${{ steps.trivy_config.outcome }}" = success
+
+  image:
+    needs:
+      - test
+      - source-audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build local image
+        run: |
+          docker build \
+            --build-arg APP_VERSION=0.5.2 \
+            --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --build-arg VCS_REF="${GITHUB_SHA}" \
+            --build-arg VCS_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --tag penczreq:ci .
+      - name: Inspect image and run container smoke
+        run: |
+          bash tools/inspect-image.sh penczreq:ci
+          bash tools/container-smoke.sh penczreq:ci
+          mkdir -p dist
+          docker image inspect penczreq:ci --format '{{.Id}}' > dist/image-id.txt
+          docker history --no-trunc penczreq:ci > dist/image-history.txt
+      - name: Generate SPDX SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          image: penczreq:ci
+          format: spdx-json
+          output-file: dist/penczreq-0.5.2.spdx.json
+          upload-artifact: false
+      - name: Scan image with Trivy
+        id: trivy_image
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: penczreq:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          format: json
+          output: dist/trivy-image.json
+          exit-code: "1"
+      - name: Upload image evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-evidence
+          path: dist/
+          if-no-files-found: error
+      - name: Enforce image scan result
+        if: always()
+        run: test "${{ steps.trivy_image.outcome }}" = success

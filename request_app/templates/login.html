@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b111a">
+  <title>{{ t("Logowanie — penczREQ") }}</title>
+  <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}?v={{ app_version }}" type="image/svg+xml">
+  <link rel="alternate icon" href="{{ url_for('static', path='/icons/favicon-32.png') }}?v={{ app_version }}" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/pwa-192.png') }}?v={{ app_version }}">
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v02.css') }}?v={{ app_version }}">
+</head>
+<body class="login-wallpaper">
+  <main class="bare-login">
+    <h1 class="visually-hidden">penczREQ</h1>
+    <form method="post" action="/login" class="bare-login-form" aria-label="{{ t('Logowanie') }}">
+      <input type="hidden" name="login_csrf_token" value="{{ login_csrf_token }}">
+      <label class="visually-hidden" for="login-username">{{ t("Login") }}</label>
+      <input id="login-username" name="username" autocomplete="username" placeholder="{{ t('Login') }}" required autofocus>
+      <label class="visually-hidden" for="login-password">{{ t("Hasło") }}</label>
+      <input id="login-password" type="password" name="password" autocomplete="current-password" placeholder="{{ t('Hasło') }}" required>
+      {% if error %}<p class="auth-error" role="alert">{{ error }}</p>{% endif %}
+      <button class="button primary" type="submit">{{ t("Zaloguj") }}</button>
+    </form>
+    <form class="language-switch auth-language-switch" method="post" action="/language" aria-label="{{ t('Język') }}">
+      <input type="hidden" name="next" value="/login">
+      <button type="submit" name="language" value="en" {% if language == 'en' %}class="active" aria-current="true"{% endif %}>EN</button>
+      <span aria-hidden="true">|</span>
+      <button type="submit" name="language" value="pl" {% if language == 'pl' %}class="active" aria-current="true"{% endif %}>PL</button>
+    </form>
+  </main>
+  <div class="version-badge">v{{ app_version }}</div>
+</body>
+</html>

@@ -1,0 +1,12 @@
+requests.example.com {
+	reverse_proxy 192.0.2.10:18000
+}
+
+control.example.internal {
+	tls internal
+
+	@outside_lan not remote_ip 127.0.0.0/8 10.0.0.0/24
+	respond @outside_lan 403
+
+	reverse_proxy 192.0.2.10:18001
+}
