@@ -393,8 +393,8 @@ def _legacy_database(path: Path) -> Database:
             """
         )
         legacy_private_push_test = bytes.fromhex(
-            "506f776961646f6d69656e69612073797374656d6f77652050454e435a464c4958"
-            "20726571756573747920647a6961c582616ac48520707261776964c5826f776f2e"
+            "506f776961646f6d69656e69612073797374656d6f77652050454e435a464c4958"  # pragma: allowlist secret
+            "20726571756573747920647a6961c582616ac48520707261776964c5826f776f2e"  # pragma: allowlist secret
         ).decode("utf-8")
         records = (
             ("app_update", "Aktualizacja 0.4.3", "Wdrożono wersję 0.4.3.\nPełna historia zmian jest dostępna po kliknięciu numeru wersji.", None),

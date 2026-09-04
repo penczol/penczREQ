@@ -55,6 +55,11 @@ def answers(**overrides):
     return result
 
 
+@pytest.fixture
+def no_root_chown(monkeypatch):
+    monkeypatch.setattr(installer.os, "chown", lambda *_args: None, raising=False)
+
+
 def stub_execute_lifecycle(
     monkeypatch,
     tmp_path,
@@ -462,6 +467,7 @@ def test_upgrade_repairs_env_metadata_without_rewriting_or_rotating_secrets(
     ]
 
 
+@pytest.mark.usefixtures("no_root_chown")
 def test_upgrade_preserves_all_legacy_manual_proxy_values(monkeypatch, tmp_path):
     config = installer.InstallConfig.from_mapping(
         answers(
@@ -533,6 +539,7 @@ def test_env_content_update_forwards_explicit_root_ownership(monkeypatch, tmp_pa
     assert writes == [(path, "PUBLIC_PORT=28000\n", 0o600, (0, 0))]
 
 
+@pytest.mark.usefixtures("no_root_chown")
 def test_fresh_files_create_separate_0600_env_and_refuse_reuse(monkeypatch, tmp_path):
     config = installer.InstallConfig.from_mapping(answers())
     monkeypatch.setattr(installer.InstallConfig, "root_path", property(lambda self: tmp_path))
@@ -556,6 +563,7 @@ def test_fresh_files_create_separate_0600_env_and_refuse_reuse(monkeypatch, tmp_
         installer._fresh_files(config)
 
 
+@pytest.mark.usefixtures("no_root_chown")
 def test_upgrade_preserves_secrets_and_creates_checked_pair_backup_and_snapshot(
     monkeypatch, tmp_path
 ):

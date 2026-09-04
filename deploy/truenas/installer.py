@@ -834,8 +834,8 @@ def dry_run(
         "SESSION_SECRET": "x" * 48,
         "CONTROL_SESSION_SECRET": "y" * 48,
         "CONFIG_ENCRYPTION_KEY": "z" * 48,
-        "PUBLIC_ADMIN_BOOTSTRAP_PASSWORD": "GeneratedPublicPassword2026",
-        "CONTROL_BOOTSTRAP_PASSWORD": "GeneratedControlPassword2026",
+        "PUBLIC_ADMIN_BOOTSTRAP_PASSWORD": "GeneratedPublicPassword2026",  # pragma: allowlist secret
+        "CONTROL_BOOTSTRAP_PASSWORD": "GeneratedControlPassword2026",  # pragma: allowlist secret
     }
     public, control = environment_values(config, placeholders)
     compose = render_compose(template, config, local_image=local_image)
