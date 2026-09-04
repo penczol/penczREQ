@@ -7,6 +7,8 @@ network="${prefix}-net"
 public_name="${prefix}-public"
 control_name="${prefix}-control"
 test_root="/tmp/${prefix}"
+host_uid="$(id -u)"
+host_gid="$(id -g)"
 
 case "$test_root" in
   /tmp/penczreq-v050-smoke) ;;
@@ -17,26 +19,43 @@ cleanup_containers() {
   docker rm -f "$public_name" "$control_name" >/dev/null 2>&1 || true
 }
 
+set_test_root_ownership() {
+  owner="$1"
+  [ -d "$test_root" ] || return 0
+  [ ! -L "$test_root" ] || return 1
+  docker run --rm \
+    --network none \
+    --read-only \
+    --user 0:0 \
+    --cap-drop ALL \
+    --cap-add CHOWN \
+    --security-opt no-new-privileges:true \
+    --mount "type=bind,src=$test_root,dst=/smoke-data" \
+    --entrypoint chown \
+    "$image" \
+    -R "$owner" /smoke-data
+}
+
 cleanup_all() {
   cleanup_containers
   docker network rm "$network" >/dev/null 2>&1 || true
-  rm -rf -- "$test_root"
+  set_test_root_ownership "${host_uid}:${host_gid}" >/dev/null 2>&1 || true
+  rm -rf -- "$test_root" || true
 }
 
-trap cleanup_all EXIT INT TERM
+cleanup_on_exit() {
+  status="$1"
+  trap - EXIT INT TERM
+  cleanup_all
+  exit "$status"
+}
+
+trap 'cleanup_on_exit $?' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 cleanup_all
 mkdir -p "$test_root/app" "$test_root/control" "$test_root/backups"
-docker run --rm \
-  --network none \
-  --read-only \
-  --user 0:0 \
-  --cap-drop ALL \
-  --cap-add CHOWN \
-  --security-opt no-new-privileges:true \
-  --mount "type=bind,src=$test_root,dst=/smoke-data" \
-  --entrypoint chown \
-  "$image" \
-  -R 568:568 /smoke-data
+set_test_root_ownership 568:568
 docker network create --subnet 172.29.43.0/24 "$network" >/dev/null
 
 session_secret="$(head -c 48 /dev/urandom | base64 | tr -d '\n')"
