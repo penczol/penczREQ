@@ -1,0 +1,87 @@
+.season-tabs {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  padding: 4px;
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  background: rgba(8, 12, 17, .38);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #38445a transparent;
+}
+
+.season-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.season-tabs::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #38445a;
+}
+
+.season-tab {
+  flex: 0 0 auto;
+  min-height: 25px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #9eabba;
+  background: transparent;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.season-tab:hover {
+  color: #e7ebf2;
+  border-color: #3b475b;
+  background: rgba(38, 47, 62, .72);
+}
+
+.season-tab.active {
+  color: #f2efff;
+  border-color: rgba(139, 121, 255, .62);
+  background: rgba(119, 103, 243, .22);
+}
+
+.season-tab:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 1px;
+}
+
+.season-tab-mobile {
+  display: none;
+}
+
+@media (max-width: 680px) {
+  .season-tabs {
+    gap: 6px;
+    margin-top: 9px;
+    padding: 5px;
+    scroll-snap-type: x proximity;
+  }
+
+  .season-tab {
+    min-width: 48px;
+    min-height: 38px;
+    padding: 7px 11px;
+    border-color: var(--line);
+    border-radius: 9px;
+    font-size: 11px;
+    scroll-snap-align: start;
+  }
+
+  .season-tab-desktop {
+    display: none;
+  }
+
+  .season-tab-mobile {
+    display: inline;
+  }
+}

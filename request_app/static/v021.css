@@ -1,0 +1,447 @@
+/*
+ * v0.2.1 – compact request cards.
+ * Desktop and mobile deliberately use separate layouts.
+ */
+
+/* Desktop: one compact horizontal row with a fixed 2:3 poster. */
+.request-card.request-card-v02 {
+  grid-template-columns: 108px minmax(0, 1fr);
+  align-items: start;
+  min-height: 162px;
+}
+
+.request-card-v02 .poster {
+  width: 108px;
+  height: 162px;
+  min-height: 0;
+  align-self: start;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+.request-card-v02 .card-content {
+  align-content: start;
+  padding: 11px 13px 9px;
+}
+
+.request-card-v02 .card-heading {
+  gap: 12px;
+}
+
+.request-card-v02 h2 {
+  font-size: clamp(17px, 1.55vw, 20px);
+}
+
+.request-card-v02 .original-title {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.request-card-v02 .card-facts {
+  align-self: auto;
+  gap: 6px 20px;
+  margin-top: 6px;
+  font-size: 9px;
+}
+
+.request-card-v02 .card-facts small {
+  font-size: 7px;
+}
+
+.request-card-v02 .release-dates-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin-top: 7px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: rgba(8, 12, 17, .3);
+  color: #b8c1cf;
+  font-size: 8px;
+  line-height: 1.25;
+}
+
+.request-card-v02 .release-dates-grid > span {
+  display: block;
+  min-width: 0;
+  padding: 5px 7px;
+  overflow-wrap: anywhere;
+}
+
+.request-card-v02 .release-dates-grid > span + span {
+  border-left: 1px solid var(--line-soft);
+}
+
+.request-card-v02 .release-dates-grid small {
+  display: block;
+  margin-bottom: 1px;
+  color: #69768a;
+  font-size: 6.5px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.request-card-v02 .admin-meta {
+  gap: 5px 20px;
+  margin-top: 5px;
+  font-size: 8.5px;
+}
+
+.request-card-v02 .card-actions {
+  gap: 8px;
+  margin-top: 7px;
+  padding-top: 7px;
+}
+
+.request-card-v02 .mini-button {
+  min-height: 27px;
+  padding: 4px 8px;
+  font-size: 9px;
+}
+
+.request-card-v02 .like-button {
+  min-width: 47px;
+  min-height: 29px;
+  padding: 4px 9px;
+  font-size: 10px;
+}
+
+.request-card-v02 .card-actions .button {
+  min-height: 29px;
+  padding: 4px 9px;
+  font-size: 9px;
+}
+
+.request-card-v02 .status-admin-wrap {
+  width: min(220px, 31vw);
+  gap: 4px;
+}
+
+.request-card-v02 .status-control select {
+  min-height: 33px;
+  margin-top: 2px;
+}
+
+.request-card-v02 .confirm-status {
+  min-height: 27px;
+}
+
+@media (min-width: 681px) and (max-width: 1050px) {
+  .request-card-v02 .release-dates-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .request-card-v02 .release-dates-grid > span:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .request-card-v02 .release-dates-grid > span:nth-child(4) {
+    border-top: 1px solid var(--line-soft);
+  }
+}
+
+/*
+ * Mobile: poster and heading share the top; facts, release dates and actions
+ * become full-width compact rows. No desktop negative-margin tricks.
+ */
+@media (max-width: 680px) {
+  .shell {
+    padding-inline: 9px;
+  }
+
+  .page-top {
+    gap: 7px;
+    padding: 11px 0 9px;
+  }
+
+  .page-top > .button {
+    min-height: 39px;
+  }
+
+  .tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    padding: 3px;
+  }
+
+  .tab {
+    min-width: 0;
+    min-height: 37px;
+    gap: 5px;
+    padding: 5px 6px;
+    font-size: 10px;
+  }
+
+  .tab .count-badge {
+    min-width: 18px;
+    height: 18px;
+    font-size: 8px;
+  }
+
+  .toolbar {
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .toolbar label {
+    gap: 2px;
+    font-size: 9px;
+  }
+
+  .toolbar select {
+    min-height: 35px;
+    padding-block: 5px;
+    font-size: 9.5px;
+  }
+
+  .section-note {
+    min-height: 0;
+    margin: 7px 1px 9px;
+    font-size: 9.5px;
+    line-height: 1.35;
+  }
+
+  .request-list {
+    gap: 9px;
+  }
+
+  .request-card.request-card-v02 {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    column-gap: 9px;
+    align-items: start;
+    min-height: 0;
+    padding: 9px;
+    overflow: hidden;
+    border-radius: 13px;
+  }
+
+  .request-card-v02 .poster {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 74px;
+    height: 111px;
+    min-height: 0;
+    border-radius: 8px;
+  }
+
+  .request-card-v02 .card-content {
+    display: contents;
+    padding: 0;
+  }
+
+  .request-card-v02 .card-heading {
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .request-card-v02 .card-kickers {
+    gap: 5px;
+    margin-bottom: 2px;
+    font-size: 7.5px;
+  }
+
+  .request-card-v02 .card-kickers span + span::before {
+    margin-right: 5px;
+  }
+
+  .request-card-v02 h2 {
+    font-size: 15px;
+    line-height: 1.15;
+  }
+
+  .request-card-v02 .original-title {
+    margin-top: 3px;
+    font-size: 9px;
+    line-height: 1.25;
+  }
+
+  .request-card-v02 .status-chip {
+    align-self: start;
+    padding: 4px 6px;
+    font-size: 7px;
+    line-height: 1.15;
+    white-space: normal;
+    text-align: center;
+  }
+
+  .request-card-v02 .release-box {
+    min-width: 78px;
+    padding: 5px 6px;
+  }
+
+  .request-card-v02 .release-box span {
+    font-size: 6px;
+  }
+
+  .request-card-v02 .release-box strong {
+    font-size: 8.5px;
+  }
+
+  .request-card-v02 .status-admin-wrap {
+    width: 102px;
+    gap: 3px;
+  }
+
+  .request-card-v02 .status-admin-wrap .status-control,
+  .request-card-v02 .status-admin-wrap select {
+    width: 102px;
+  }
+
+  .request-card-v02 .status-control {
+    font-size: 7px;
+  }
+
+  .request-card-v02 .status-control select {
+    min-height: 29px;
+    padding: 4px 20px 4px 6px;
+    font-size: 8px;
+  }
+
+  .request-card-v02 .confirm-status {
+    width: 100%;
+    min-height: 25px;
+    padding: 3px 5px;
+    font-size: 7.5px;
+  }
+
+  .request-card-v02 .card-facts {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    gap: 5px 13px;
+    margin: 5px 0 0;
+    padding: 0;
+    font-size: 8.5px;
+  }
+
+  .request-card-v02 .card-facts small {
+    font-size: 6.5px;
+  }
+
+  .request-card-v02 .release-dates-grid {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 8px 0 0;
+    padding: 0;
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+    font-size: 8px;
+    line-height: 1.2;
+  }
+
+  .request-card-v02 .release-dates-grid > span {
+    padding: 5px 6px;
+  }
+
+  .request-card-v02 .release-dates-grid > span:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .request-card-v02 .release-dates-grid > span:nth-child(4) {
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .request-card-v02 .release-dates-grid small {
+    font-size: 6px;
+  }
+
+  .request-card-v02 .admin-meta {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    gap: 5px 16px;
+    margin: 6px 0 0;
+    padding: 0;
+    font-size: 8px;
+  }
+
+  .request-card-v02 .card-actions {
+    grid-column: 1 / -1;
+    grid-row: 5;
+    align-items: center;
+    gap: 6px;
+    margin: 7px 0 0;
+    padding: 7px 0 0;
+  }
+
+  .request-card-v02 .external-actions {
+    max-width: none;
+  }
+
+  .request-card-v02 .request-actions {
+    flex: 1;
+  }
+
+  .request-card-v02 .mini-button {
+    min-height: 26px;
+    padding: 4px 7px;
+    font-size: 8px;
+  }
+
+  .request-card-v02 .like-button {
+    min-width: 45px;
+    min-height: 27px;
+    padding: 4px 8px;
+    font-size: 9px;
+  }
+
+  .request-card-v02 .card-actions .button {
+    min-height: 27px;
+    padding: 4px 7px;
+    font-size: 8px;
+  }
+
+  .request-card-v02 .inline-confirm {
+    justify-content: flex-end;
+    font-size: 8px;
+  }
+}
+
+@media (max-width: 430px) {
+  .request-card.request-card-v02 {
+    grid-template-columns: 68px minmax(0, 1fr);
+    column-gap: 8px;
+    padding: 8px;
+  }
+
+  .request-card-v02 .poster {
+    width: 68px;
+    height: 102px;
+  }
+
+  .request-card-v02 .card-heading {
+    gap: 4px;
+  }
+
+  .request-card-v02 h2 {
+    font-size: 14px;
+  }
+
+  .request-card-v02 .status-admin-wrap {
+    width: 96px;
+  }
+
+  .request-card-v02 .status-admin-wrap .status-control,
+  .request-card-v02 .status-admin-wrap select {
+    width: 96px;
+  }
+
+  .request-card-v02 .card-facts,
+  .request-card-v02 .admin-meta,
+  .request-card-v02 .card-actions {
+    margin-left: 0;
+    padding-left: 0;
+  }
+}

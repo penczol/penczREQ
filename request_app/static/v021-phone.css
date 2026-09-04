@@ -1,0 +1,9 @@
+@media (max-width: 430px) {
+  .tab {
+    font-size: 0;
+  }
+
+  .tab::before {
+    font-size: 9.5px;
+  }
+}

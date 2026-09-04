@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#080d16">
+  <title>penczREQ Control</title>
+  <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ url_for('static', path='/control.css') }}?v={{ app_version }}">
+</head>
+<body class="control-auth">
+  <main class="control-auth-shell">
+    <section class="control-auth-card">
+      <div class="control-mark" aria-hidden="true">Pr</div>
+      <p class="control-kicker">{{ t("Dostęp lokalny") }}</p>
+      <h1>penczREQ Control</h1>
+      <p>{{ t("Oddzielny panel bezpieczeństwa i konfiguracji serwera.") }}</p>
+      <form method="post" action="/login" class="control-form">
+        <input type="hidden" name="login_csrf_token" value="{{ login_csrf_token }}">
+        <label>{{ t("Login") }}<input name="username" required maxlength="64" autocomplete="username" autofocus></label>
+        <label>{{ t("Hasło") }}<input type="password" name="password" required maxlength="128" autocomplete="current-password"></label>
+        {% if error %}<p class="control-error" role="alert">{{ error }}</p>{% endif %}
+        <button class="control-button primary" type="submit">{{ t("Zaloguj do panelu") }}</button>
+      </form>
+      <p class="control-auth-note">{{ t("Panel nie powinien być dostępny z Internetu.") }}</p>
+      <form class="language-switch auth-language-switch" method="post" action="/language" aria-label="{{ t('Język') }}">
+        <input type="hidden" name="next" value="/login">
+        <button type="submit" name="language" value="en" {% if language == 'en' %}class="active" aria-current="true"{% endif %}>EN</button><span aria-hidden="true">|</span><button type="submit" name="language" value="pl" {% if language == 'pl' %}class="active" aria-current="true"{% endif %}>PL</button>
+      </form>
+    </section>
+  </main>
+  <span class="control-version">v{{ app_version }}</span>
+</body>
+</html>

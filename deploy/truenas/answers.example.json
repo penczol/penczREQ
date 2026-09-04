@@ -1,0 +1,18 @@
+{
+  "mode": "fresh",
+  "app_name": "penczreq",
+  "image": "ghcr.io/<owner>/penczreq:0.5.2",
+  "root_dataset": "POOL/apps/penczreq",
+  "nas_ip": "192.0.2.10",
+  "public_port": 18000,
+  "control_port": 18001,
+  "public_access_mode": "lan",
+  "public_url": "http://192.0.2.10:18000",
+  "control_access_mode": "lan",
+  "control_url": "http://192.0.2.10:18001",
+  "control_allowed_networks": "192.0.2.0/24",
+  "timezone": "Europe/Warsaw",
+  "vapid_subject": "mailto:webpush@example.invalid",
+  "public_admin_username": "admin",
+  "control_admin_username": "control-admin"
+}

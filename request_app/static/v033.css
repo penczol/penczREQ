@@ -1,0 +1,23 @@
+/* v0.3.4: user card shares poster height and anchors metadata above actions. */
+@media (min-width: 681px) {
+  body.user-view .request-card.request-card-v02 {
+    height: 164px;
+    min-height: 164px;
+    max-height: 164px;
+  }
+
+  body.user-view .request-card-v02 .poster {
+    height: 162px;
+  }
+
+  body.user-view .request-card-v02 .card-content {
+    height: 162px;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    overflow: hidden;
+  }
+
+  body.user-view .request-card-v02 .card-meta-row {
+    align-self: end;
+  }
+}

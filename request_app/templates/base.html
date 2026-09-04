@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0b111a">
+  {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
+  <title>{% block title %}{{ t("Requesty") }}{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}?v={{ app_version }}" type="image/svg+xml">
+  <link rel="alternate icon" href="{{ url_for('static', path='/icons/favicon-32.png') }}?v={{ app_version }}" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/pwa-192.png') }}?v={{ app_version }}">
+  <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v02.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v021.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v021-phone.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v030.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v032.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v033.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v035.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v039.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v0310.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v0311.css') }}?v={{ app_version }}">
+</head>
+<body class="{% if user %}{% if is_admin %}admin-view{% else %}user-view{% endif %}{% endif %}">
+  <div class="shell">
+    {% if user %}
+    <header class="site-header">
+      <a class="brand" href="/">penczREQ</a>
+      <nav class="header-actions" aria-label="{{ t('Konto') }}">
+        <button class="button ghost notification-trigger" type="button" data-open-notifications aria-label="{{ t('Powiadomienia') }}">{{ t("Powiadomienia") }} <span class="count-badge" data-unread-count hidden>0</span></button>
+        <div class="account-trigger-wrap">
+          <button class="button ghost" type="button" data-open-account>{{ t("Moje konto") }}</button>
+          <span class="current-user" title="{{ t('Zalogowany użytkownik') }}">{{ user.username }}</span>
+        </div>
+        <form class="language-switch header-language-switch" method="post" action="/language" aria-label="{{ t('Język') }}">
+          <input type="hidden" name="next" value="{{ request.url.path }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" name="language" value="en" {% if language == 'en' %}class="active" aria-current="true"{% endif %}>EN</button><span aria-hidden="true">|</span><button type="submit" name="language" value="pl" {% if language == 'pl' %}class="active" aria-current="true"{% endif %}>PL</button>
+        </form>
+        <form method="post" action="/logout">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="button ghost" type="submit">{{ t("Wyloguj") }}</button>
+        </form>
+      </nav>
+    </header>
+    {% endif %}
+    <main>{% block content %}{% endblock %}</main>
+    {% if user %}<footer class="tmdb-credit">{{ t("Ten produkt korzysta z API TMDB, ale nie jest wspierany ani certyfikowany przez TMDB.") }}</footer>{% endif %}
+  </div>
+
+  {% if user %}
+  <dialog id="notifications-dialog" class="modal compact-modal">
+    <div class="modal-head"><h2>{{ t("Powiadomienia") }}</h2><button class="icon-button" type="button" data-close-dialog aria-label="{{ t('Zamknij') }}">×</button></div>
+    <div class="notification-tabs" role="tablist">
+      <button class="notification-tab active" type="button" data-notification-bucket="unread">{{ t("Nieodczytane") }} <span data-notification-count="unread">0</span></button>
+      <button class="notification-tab" type="button" data-notification-bucket="read">{{ t("Odczytane") }} <span data-notification-count="read">0</span></button>
+    </div>
+    <div id="notifications-list" class="notification-list"></div>
+    <div class="modal-actions notification-actions">
+      <button class="button" type="button" data-mark-read>{{ t("Oznacz wszystkie jako przeczytane") }}</button>
+      <button class="button danger ghost-danger" type="button" data-delete-read hidden>{{ t("Usuń wszystkie odczytane") }}</button>
+    </div>
+  </dialog>
+
+  <dialog id="changelog-dialog" class="modal changelog-modal">
+    <div class="modal-head"><h2>{{ t("Historia zmian") }}</h2><button class="icon-button" type="button" data-close-dialog aria-label="{{ t('Zamknij') }}">×</button></div>
+    <div class="changelog-list">
+      {% for release in changelog_for(is_admin, language) %}
+      <section class="changelog-release">
+        <header><h3>v{{ release.version }}</h3><time>{{ release.date }}</time></header>
+        <ul>{% for change in release.changes %}<li>{{ change }}</li>{% endfor %}</ul>
+      </section>
+      {% endfor %}
+    </div>
+  </dialog>
+
+  <dialog id="account-dialog" class="modal">
+    <div class="modal-head"><h2>{{ t("Moje konto") }}</h2><button class="icon-button" type="button" data-close-dialog aria-label="{{ t('Zamknij') }}">×</button></div>
+    <div class="account-grid">
+      <section>
+        <h3>{{ t("Powiadomienia wewnętrzne") }}</h3>
+        <form id="preferences-form" class="stack-form">
+          <label class="switch"><input type="checkbox" name="own_request_liked"><span>{{ t("Ktoś polubił mój request") }}</span></label>
+          <label class="switch"><input type="checkbox" name="request_changes"><span>{{ t("Zmiany dodanych i polubionych pozycji") }}</span></label>
+          <label class="switch"><input type="checkbox" name="admin_messages"><span>{{ t("Wiadomości od administratora") }}</span></label>
+          {% if is_real_admin %}<label class="switch"><input type="checkbox" name="admin_new_request"><span>{{ t("Użytkownik utworzył nowy request") }}</span></label>{% endif %}
+          <button class="button" type="submit">{{ t("Zapisz ustawienia") }}</button>
+          <p class="form-message" data-preferences-message aria-live="polite"></p>
+        </form>
+      </section>
+      <section class="device-app-settings">
+        <h3>{{ t("Aplikacja na urządzeniu") }}</h3>
+        <p class="hint">{{ t("Zainstaluj penczREQ jako aplikację i połącz powiadomienia z Androidem lub przeglądarką.") }}</p>
+        <div class="device-app-actions">
+          <button class="button primary" type="button" data-install-pwa hidden>{{ t("Zainstaluj aplikację") }}</button>
+          <button class="button" type="button" data-enable-push>{{ t("Włącz powiadomienia systemowe") }}</button>
+          <button class="button" type="button" data-test-push hidden>{{ t("Wyślij test") }}</button>
+          <button class="button danger ghost-danger" type="button" data-disable-push hidden>{{ t("Wyłącz na tym urządzeniu") }}</button>
+        </div>
+        <p class="form-message push-state-message" data-push-message aria-live="polite">{{ t("Sprawdzanie obsługi urządzenia…") }}</p>
+      </section>
+      <section>
+        <h3>{{ t("Zmiana hasła") }}</h3>
+        <form id="password-form" class="stack-form">
+          <label>{{ t("Obecne hasło") }}<input type="password" name="current_password" autocomplete="current-password" required></label>
+          <label>{{ t("Nowe hasło") }}<input type="password" name="new_password" autocomplete="new-password" required minlength="15" maxlength="128"></label>
+          <label>{{ t("Powtórz nowe hasło") }}<input type="password" name="confirm_password" autocomplete="new-password" required minlength="15" maxlength="128"></label>
+          <p class="hint">{{ t("Minimum 15 znaków, mała i wielka litera oraz cyfra. Znaki specjalne są dozwolone, polskie litery nie.") }}</p>
+          <button class="button primary" type="submit">{{ t("Zmień hasło") }}</button>
+          <p class="form-message" data-password-message aria-live="polite"></p>
+        </form>
+      </section>
+      {% if is_real_admin %}
+      <section>
+        <h3>{{ t("Widok diagnostyczny") }}</h3>
+        {% if is_admin %}
+        <p class="hint">{{ t("Włącz widok zwykłego użytkownika, aby sprawdzić jego układ i dane bez przelogowywania.") }}</p>
+        <button class="button" type="button" data-switch-admin-view data-target-mode="user">{{ t("Przejdź do widoku użytkownika") }}</button>
+        {% else %}
+        <p class="hint">{{ t("Wyświetlany jest widok zwykłego użytkownika. Twoje konto nadal pozostaje administratorem.") }}</p>
+        <button class="button primary" type="button" data-switch-admin-view data-target-mode="admin">{{ t("Wróć do widoku administratora") }}</button>
+        {% endif %}
+        <p class="form-message" data-admin-view-message aria-live="polite"></p>
+      </section>
+      {% endif %}
+    </div>
+  </dialog>
+  {% endif %}
+
+  {% if user %}<button class="version-badge" type="button" data-open-changelog title="{{ t('Pokaż historię zmian') }}">v{{ app_version }}</button>{% else %}<div class="version-badge">v{{ app_version }}</div>{% endif %}
+  {% if user %}
+  <aside class="pwa-update-banner" data-pwa-update hidden role="status" aria-live="polite">
+    <p>{{ t("Nowa wersja aplikacji jest gotowa.") }}</p>
+    <div>
+      <button class="button primary" type="button" data-apply-pwa-update>{{ t("Odśwież aplikację") }}</button>
+      <button class="button" type="button" data-dismiss-pwa-update>{{ t("Później") }}</button>
+    </div>
+  </aside>
+  {% endif %}
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="i18n-config" data-language="{{ language }}" data-strict="{{ '1' if app_env != 'production' else '0' }}" data-translations="{{ client_translations | tojson | forceescape }}" hidden></div>
+  <script src="{{ url_for('static', path='/common.js') }}?v={{ app_version }}" defer></script>
+  <script src="{{ url_for('static', path='/pwa.js') }}?v={{ app_version }}" defer></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

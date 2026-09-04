@@ -1,0 +1,63 @@
+# Local configuration and credentials. Keep only sanitized examples.
+.env
+.env.*
+!.env.example
+!.env.container.example
+*.pem
+*.key
+*.secret
+*credentials*.txt
+secrets/
+*.p12
+*.pfx
+
+# Python environments, caches, coverage and packaging output.
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# JavaScript dependencies and local editor/OS state.
+node_modules/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Runtime data must never enter source control.
+dev-data/
+container-data/
+migration-test/
+private-docs/
+worklog/
+logs/
+build-temp/
+penczreq-installer-dry-run/
+backups/
+posters/
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.log
+*.jsonl
+
+# Generated release archives and local scan artifacts.
+release/
+*.tar
+*.tar.gz
+*.zip
+sbom*.json
+*-audit*.json
+trivy-*.json

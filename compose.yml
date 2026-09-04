@@ -1,0 +1,149 @@
+name: penczreq
+
+x-runtime: &runtime
+  image: ${PENCZREQ_IMAGE:-penczreq:0.5.2}
+  build:
+    context: .
+    args:
+      APP_VERSION: "0.5.2"
+      VCS_URL: ${VCS_URL:-local://penczreq}
+      VCS_REF: ${VCS_REF:-local}
+      BUILD_DATE: ${BUILD_DATE:-local}
+  restart: unless-stopped
+  user: "568:568"
+  read_only: true
+  init: true
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,nodev,size=64m,mode=1777
+  pids_limit: 256
+  stop_grace_period: 30s
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  control:
+    <<: *runtime
+    command:
+      - python
+      - -m
+      - request_app.server
+      - control
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_COMPONENT: control
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
+      CONTROL_BASE_URL: ${CONTROL_BASE_URL:?set CONTROL_BASE_URL}
+      PUBLIC_ACCESS_MODE: ${PUBLIC_ACCESS_MODE:-reverse-proxy}
+      CONTROL_ACCESS_MODE: ${CONTROL_ACCESS_MODE:-lan}
+      COOKIE_SECURE: ${CONTROL_COOKIE_SECURE:-false}
+      DATA_DIR: /data
+      CONTROL_DATA_DIR: /control-data
+      BACKUP_DIR: /backups
+      LOG_DIR: /data/logs
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?set ALLOWED_HOSTS}
+      CONTROL_ALLOWED_HOSTS: ${CONTROL_ALLOWED_HOSTS:?set CONTROL_ALLOWED_HOSTS}
+      CONTROL_ALLOWED_NETWORKS: ${CONTROL_ALLOWED_NETWORKS:?set CONTROL_ALLOWED_NETWORKS}
+      CONTROL_TRUSTED_PROXIES: ${CONTROL_TRUSTED_PROXIES:-}
+      PUBLIC_TRUSTED_PROXIES: ${PUBLIC_TRUSTED_PROXIES:-}
+      AUTO_TRUST_RUNTIME_GATEWAY: ${AUTO_TRUST_RUNTIME_GATEWAY:-false}
+      FORWARDED_ALLOW_IPS: ${CONTROL_FORWARDED_ALLOW_IPS:-}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:?set CONFIG_ENCRYPTION_KEY}
+      CONTROL_SESSION_SECRET: ${CONTROL_SESSION_SECRET:?set CONTROL_SESSION_SECRET}
+      PUBLIC_ADMIN_USERNAME: ${PUBLIC_ADMIN_USERNAME:-admin}
+      PUBLIC_ADMIN_BOOTSTRAP_PASSWORD: ${PUBLIC_ADMIN_BOOTSTRAP_PASSWORD:-}
+      CONTROL_ADMIN_USERNAME: ${CONTROL_ADMIN_USERNAME:-control-admin}
+      CONTROL_BOOTSTRAP_PASSWORD: ${CONTROL_BOOTSTRAP_PASSWORD:-}
+      CONTROL_RECOVERY_NONCE: ${CONTROL_RECOVERY_NONCE:-}
+      CONTROL_RECOVERY_PASSWORD: ${CONTROL_RECOVERY_PASSWORD:-}
+      TMDB_TOKEN: ${TMDB_TOKEN:-}
+      CONTROL_SESSION_HOURS: ${CONTROL_SESSION_HOURS:-8}
+      CONTROL_IDLE_MINUTES: ${CONTROL_IDLE_MINUTES:-20}
+      SECURITY_LOG_RETENTION_DAYS: ${SECURITY_LOG_RETENTION_DAYS:-30}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      TZ: ${TZ:-Europe/Warsaw}
+    ports:
+      - "${CONTROL_BIND_IP:-127.0.0.1}:${CONTROL_PORT:-8001}:8001"
+    volumes:
+      - type: bind
+        source: ${APP_DATA_PATH:-./container-data/app}
+        target: /data
+      - type: bind
+        source: ${CONTROL_DATA_PATH:-./container-data/control}
+        target: /control-data
+      - type: bind
+        source: ${BACKUP_DATA_PATH:-./container-data/backups}
+        target: /backups
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/internal/health', timeout=3)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  public:
+    <<: *runtime
+    command:
+      - python
+      - -m
+      - request_app.server
+      - public
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    depends_on:
+      control:
+        condition: service_healthy
+    environment:
+      APP_ENV: ${APP_ENV:-production}
+      APP_COMPONENT: public
+      APP_BASE_URL: ${APP_BASE_URL:?set APP_BASE_URL}
+      CONTROL_BASE_URL: ${CONTROL_BASE_URL:-http://127.0.0.1:8001}
+      PUBLIC_ACCESS_MODE: ${PUBLIC_ACCESS_MODE:-reverse-proxy}
+      CONTROL_ACCESS_MODE: ${CONTROL_ACCESS_MODE:-lan}
+      COOKIE_SECURE: ${PUBLIC_COOKIE_SECURE:-true}
+      DATA_DIR: /data
+      LOG_DIR: /data/logs
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?set ALLOWED_HOSTS}
+      PUBLIC_TRUSTED_PROXIES: ${PUBLIC_TRUSTED_PROXIES:-}
+      AUTO_TRUST_RUNTIME_GATEWAY: ${AUTO_TRUST_RUNTIME_GATEWAY:-false}
+      FORWARDED_ALLOW_IPS: ${PUBLIC_FORWARDED_ALLOW_IPS:-}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET}
+      CONFIG_ENCRYPTION_KEY: ${CONFIG_ENCRYPTION_KEY:?set CONFIG_ENCRYPTION_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:webpush@example.invalid}
+      SESSION_DAYS: ${SESSION_DAYS:-180}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-43200}
+      TMDB_REFRESH_HOURS: ${TMDB_REFRESH_HOURS:-6}
+      SECURITY_LOG_RETENTION_DAYS: ${SECURITY_LOG_RETENTION_DAYS:-30}
+      TZ: ${TZ:-Europe/Warsaw}
+    ports:
+      - "${PUBLIC_BIND_IP:-127.0.0.1}:${PUBLIC_PORT:-8000}:8000"
+    volumes:
+      - type: bind
+        source: ${APP_DATA_PATH:-./container-data/app}
+        target: /data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/internal/health', timeout=3)
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
