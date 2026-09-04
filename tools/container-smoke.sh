@@ -26,7 +26,17 @@ cleanup_all() {
 trap cleanup_all EXIT INT TERM
 cleanup_all
 mkdir -p "$test_root/app" "$test_root/control" "$test_root/backups"
-chown -R 568:568 "$test_root"
+docker run --rm \
+  --network none \
+  --read-only \
+  --user 0:0 \
+  --cap-drop ALL \
+  --cap-add CHOWN \
+  --security-opt no-new-privileges:true \
+  --mount "type=bind,src=$test_root,dst=/smoke-data" \
+  --entrypoint chown \
+  "$image" \
+  -R 568:568 /smoke-data
 docker network create --subnet 172.29.43.0/24 "$network" >/dev/null
 
 session_secret="$(head -c 48 /dev/urandom | base64 | tr -d '\n')"
