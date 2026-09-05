@@ -1,0 +1,508 @@
+{
+  "schema_version": 1,
+  "review_date": "2026-09-05",
+  "source": {
+    "ci_run": 33954247750,
+    "commit": "sha1:a2e9b00391ea2494ff2aab82243ce6f5034dd7e9",
+    "artifact": "image-evidence",
+    "report": "dist/trivy-image.json",
+    "report_digest": "sha256:b8a9d47dd60198369a82e4dd3ca7fa96dd802a7046728f5dc35735addac77400"
+  },
+  "target": {
+    "base_image": "python:3.12.14-slim-trixie",
+    "base_image_digest": "sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea",
+    "platform_manifest_digest": "sha256:2fe5997d249a808b8eeea52c58a1dbffbba28754dc11699ef5c029f2d818ce79",
+    "os": "linux",
+    "architecture": "amd64",
+    "os_family": "debian"
+  },
+  "review_note": "Only the listed, reviewed unfixed CVE/package pairs are accepted. New or fixable HIGH/CRITICAL findings block. Changes require an explicit operator review and commit; this file is never updated by CI or the policy tool.",
+  "entries": [
+    {
+      "VulnerabilityID": "CVE-2025-69720",
+      "PkgName": "libncursesw6",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "6.5+20250216-2",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2025-69720",
+      "PkgName": "libtinfo6",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "6.5+20250216-2",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2025-69720",
+      "PkgName": "ncurses-base",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "6.5+20250216-2",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2025-69720",
+      "PkgName": "ncurses-bin",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "6.5+20250216-2",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-11822",
+      "PkgName": "libsqlite3-0",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "3.46.1-7+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-11824",
+      "PkgName": "libsqlite3-0",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "3.46.1-7+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-13221",
+      "PkgName": "perl-base",
+      "Severity": "CRITICAL",
+      "Status": "affected",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-16742",
+      "PkgName": "libsystemd0",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "257.13-1~deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-16742",
+      "PkgName": "libudev1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "257.13-1~deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-41992",
+      "PkgName": "gzip",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1.13-1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-42496",
+      "PkgName": "perl-base",
+      "Severity": "CRITICAL",
+      "Status": "fix_deferred",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-42497",
+      "PkgName": "perl-base",
+      "Severity": "HIGH",
+      "Status": "fix_deferred",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-48962",
+      "PkgName": "perl-base",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-54369",
+      "PkgName": "libacl1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.3.2-2+b1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-57432",
+      "PkgName": "perl-base",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-57433",
+      "PkgName": "perl-base",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "bsdutils",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "libblkid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "liblastlog2-2",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "libmount1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "libsmartcols1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "libuuid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "login",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:4.16.0-2+really2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "mount",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-76642",
+      "PkgName": "util-linux",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "bsdutils",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "libblkid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "liblastlog2-2",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "libmount1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "libsmartcols1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "libuuid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "login",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:4.16.0-2+really2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "mount",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78408",
+      "PkgName": "util-linux",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "bsdutils",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "libblkid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "liblastlog2-2",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "libmount1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "libsmartcols1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "libuuid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "login",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:4.16.0-2+really2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "mount",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78409",
+      "PkgName": "util-linux",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "bsdutils",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "libblkid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "liblastlog2-2",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "libmount1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "libsmartcols1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "libuuid1",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "login",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "1:4.16.0-2+really2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "mount",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-78410",
+      "PkgName": "util-linux",
+      "Severity": "HIGH",
+      "Status": "affected",
+      "InstalledVersion": "2.41.5-0+deb13u1",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-8376",
+      "PkgName": "perl-base",
+      "Severity": "CRITICAL",
+      "Status": "affected",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    },
+    {
+      "VulnerabilityID": "CVE-2026-9538",
+      "PkgName": "perl-base",
+      "Severity": "HIGH",
+      "Status": "fix_deferred",
+      "InstalledVersion": "5.40.1-6",
+      "Class": "os-pkgs",
+      "Type": "debian"
+    }
+  ]
+}

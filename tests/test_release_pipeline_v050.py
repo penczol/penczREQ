@@ -203,6 +203,46 @@ def test_ci_is_verification_only_and_pins_external_actions():
     assert "trivy-image.json" in text
 
 
+def test_ci_and_release_share_fail_closed_image_policy_and_preserve_evidence():
+    command = ("python tools/enforce_image_vulnerability_policy.py "
+               "--report dist/trivy-image.json --baseline security/trivy-image-baseline.json")
+    for filename, job_name in (("ci.yml", "image"), ("release.yml", "verify")):
+        text, document = workflow(filename)
+        steps = document["jobs"][job_name]["steps"]
+        scan = next(step for step in steps if step.get("with", {}).get("output") == "dist/trivy-image.json")
+        gate = next(step for step in steps if step["name"] == "Enforce reviewed image vulnerability policy")
+        assert scan["with"]["severity"] == "HIGH,CRITICAL"
+        assert scan["with"]["ignore-unfixed"] == "false"
+        assert scan["with"]["format"] == "json"
+        assert scan["with"]["exit-code"] == "0"
+        assert command in gate["run"].splitlines()
+        assert steps.index(scan) < steps.index(gate)
+        assert "continue-on-error" not in gate
+        assert ".trivyignore" not in text
+        assert "vex" not in text.lower()
+        for job in document["jobs"].values():
+            for step in job["steps"]:
+                options = step.get("with", {})
+                if options.get("output") in {"dist/trivy-source.json", "dist/trivy-config.json"}:
+                    assert options["exit-code"] == "1"
+        if filename == "ci.yml":
+            assert scan["id"] == "trivy_image"
+            assert gate["if"] == "always()"
+            assert gate["run"].splitlines()[0] == 'test "${{ steps.trivy_image.outcome }}" = success'
+            upload = next(step for step in steps if step["name"] == "Upload image evidence")
+            assert upload["if"] == "always()"
+            assert upload["with"]["path"] == "dist/"
+        else:
+            assert "continue-on-error" not in scan
+            assert "if" not in gate
+            seal = next(step for step in steps if step["name"] == "Seal the verified image and evidence")
+            assert steps.index(gate) < steps.index(seal)
+            assert "dist/trivy-image.json" in seal["run"]
+            publish = document["jobs"]["publish"]
+            assert publish["needs"] == "verify"
+            assert "dist/trivy-image.json" in publish["steps"][-1]["run"]
+
+
 def test_release_requires_approval_license_and_promotes_stable_last():
     text, document = workflow("release.yml")
 

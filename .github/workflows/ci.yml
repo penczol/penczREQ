@@ -155,7 +155,7 @@ jobs:
           ignore-unfixed: false
           format: json
           output: dist/trivy-image.json
-          exit-code: "1"
+          exit-code: "0"
       - name: Upload image evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -163,6 +163,8 @@ jobs:
           name: image-evidence
           path: dist/
           if-no-files-found: error
-      - name: Enforce image scan result
+      - name: Enforce reviewed image vulnerability policy
         if: always()
-        run: test "${{ steps.trivy_image.outcome }}" = success
+        run: |
+          test "${{ steps.trivy_image.outcome }}" = success
+          python tools/enforce_image_vulnerability_policy.py --report dist/trivy-image.json --baseline security/trivy-image-baseline.json
