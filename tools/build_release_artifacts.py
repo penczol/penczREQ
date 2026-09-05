@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from build_installer import ROOT, VERSION, build as build_installer
+from build_installer import ROOT, VERSION, ReleaseIdentity, build as build_installer
 
 
 RELEASE_NOTES = ROOT / "docs" / f"RELEASE-NOTES-{VERSION}.md"
@@ -22,12 +22,13 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def build(output_dir: Path) -> tuple[Path, ...]:
+def build(output_dir: Path, *, repository: str) -> tuple[Path, ...]:
+    identity = ReleaseIdentity(repository)
     output_dir.mkdir(parents=True, exist_ok=True)
     if not RELEASE_NOTES.is_file():
         raise FileNotFoundError(f"Missing release notes: {RELEASE_NOTES}")
 
-    installer, installer_checksum = build_installer(output_dir)
+    installer, installer_checksum = build_installer(output_dir, repository=repository)
     notes = output_dir / f"penczREQ-{VERSION}-release-notes.md"
     notes.write_bytes(RELEASE_NOTES.read_bytes())
 
@@ -40,8 +41,8 @@ def build(output_dir: Path) -> tuple[Path, ...]:
                 "product": "penczREQ",
                 "version": VERSION,
                 "image": {
-                    "immutable": f"ghcr.io/<owner>/penczreq:{VERSION}",
-                    "moving": "ghcr.io/<owner>/penczreq:stable",
+                    "immutable": identity.versioned_image,
+                    "moving": identity.stable_image,
                 },
                 "update_policy": {
                     "stable_requires_approved_release": True,
@@ -82,8 +83,13 @@ def build(output_dir: Path) -> tuple[Path, ...]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist")
+    parser.add_argument("--repository", required=True, help="GitHub repository slug: owner/repo")
     args = parser.parse_args()
-    for artifact in build(args.output_dir):
+    try:
+        artifacts = build(args.output_dir, repository=args.repository)
+    except ValueError as error:
+        parser.error(str(error))
+    for artifact in artifacts:
         print(artifact)
     return 0
 

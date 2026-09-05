@@ -43,8 +43,8 @@ jobs:
           bash -n deploy/truenas/install.sh tools/container-smoke.sh tools/inspect-image.sh
       - name: Verify deterministic release artifacts
         run: |
-          python tools/build_release_artifacts.py --output-dir dist/first
-          python tools/build_release_artifacts.py --output-dir dist/second
+          python tools/build_release_artifacts.py --output-dir dist/first --repository "${GITHUB_REPOSITORY}"
+          python tools/build_release_artifacts.py --output-dir dist/second --repository "${GITHUB_REPOSITORY}"
           diff --recursive --brief dist/first dist/second
 
   source-audit:

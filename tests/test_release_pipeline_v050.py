@@ -4,10 +4,15 @@ import hashlib
 import importlib.util
 import json
 import re
+import shlex
+import subprocess
 import sys
+import tarfile
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 from urllib.parse import unquote
 
+import pytest
 import yaml
 
 from request_app import __version__
@@ -15,6 +20,7 @@ from request_app import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
+PUBLIC_REPOSITORY = "example-owner/penczREQ"
 
 
 class UniqueKeyLoader(yaml.BaseLoader):
@@ -100,19 +106,22 @@ def test_release_artifacts_are_deterministic_and_self_verifying(tmp_path):
     first = tmp_path / "first"
     second = tmp_path / "second"
 
-    first_files = release_builder.build(first)
-    second_files = release_builder.build(second)
+    first_files = release_builder.build(first, repository=PUBLIC_REPOSITORY)
+    second_files = release_builder.build(second, repository=PUBLIC_REPOSITORY)
 
     assert [path.name for path in first_files] == [path.name for path in second_files]
     assert {path.name: file_digest(path) for path in first_files} == {
         path.name: file_digest(path) for path in second_files
     }
+    assert {path.name: path.read_bytes() for path in first.iterdir()} == {
+        path.name: path.read_bytes() for path in second.iterdir()
+    }
 
     manifest = json.loads((first / "release-manifest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == __version__
     assert manifest["image"] == {
-        "immutable": "ghcr.io/<owner>/penczreq:0.5.2",
-        "moving": "ghcr.io/<owner>/penczreq:stable",
+        "immutable": "ghcr.io/example-owner/penczreq:0.5.2",
+        "moving": "ghcr.io/example-owner/penczreq:stable",
     }
     assert manifest["update_policy"] == {
         "compose_or_schema_change_requires_migrator": True,
@@ -126,6 +135,187 @@ def test_release_artifacts_are_deterministic_and_self_verifying(tmp_path):
     for line in (first / "SHA256SUMS").read_text(encoding="ascii").splitlines():
         expected, filename = line.split("  ", maxsplit=1)
         assert file_digest(first / filename) == expected
+    for artifact in manifest["artifacts"]:
+        path = first / artifact["name"]
+        assert path.stat().st_size == artifact["bytes"]
+        assert file_digest(path) == artifact["sha256"]
+
+
+@pytest.mark.parametrize("repository", [
+    "", " ", "example-owner", "example-owner/", "/penczREQ",
+    "example-owner/penczREQ/extra", "https://github.com/example-owner/penczREQ",
+    " example-owner/penczREQ", "example-owner/penczREQ ", "example owner/penczREQ",
+    "example-owner/penczREQ\n", "example-owner/pen\tczREQ", "<owner>/penczREQ",
+    "OWNER/penczREQ", "placeholder/penczREQ", "placeholder", "example-owner/<repo>",
+    "example-owner/..", "example-owner/.", "-example/penczREQ", "example-/penczREQ",
+    "example-owner/penczREQ?query", "example-owner/penczREQ#fragment",
+])
+def test_invalid_release_repository_fails_before_creating_output(tmp_path, repository):
+    for builder in (installer_builder, release_builder):
+        output = tmp_path / builder.__name__
+        with pytest.raises(ValueError, match="repository"):
+            builder.build(output, repository=repository)
+        assert not output.exists()
+
+
+def test_public_release_identity_preserves_github_case_and_normalizes_registry_owner(tmp_path):
+    repository = "Example-Owner/Custom.Repo"
+    identity = installer_builder.ReleaseIdentity(repository)
+    assert identity.github_repository == repository
+    assert identity.github_release_base == (
+        "https://github.com/Example-Owner/Custom.Repo/releases/download/v0.5.2"
+    )
+    assert identity.versioned_image == "ghcr.io/example-owner/penczreq:0.5.2"
+    assert identity.stable_image == "ghcr.io/example-owner/penczreq:stable"
+    release_builder.build(tmp_path, repository=repository)
+    with tarfile.open(tmp_path / f"penczreq-installer-{__version__}.tar.gz") as package:
+        document = package.extractfile(f"penczreq-installer-{__version__}/INSTALL.md").read()
+    assert identity.github_release_base.encode() in document
+    assert identity.versioned_image.encode() in document
+
+
+@pytest.mark.parametrize("arguments", [[], ["--repository", "invalid"], ["--repository", ""]])
+def test_public_release_cli_requires_valid_explicit_identity(tmp_path, arguments):
+    output = tmp_path / "release"
+    result = subprocess.run(
+        [sys.executable, str(TOOLS / "build_release_artifacts.py"),
+         "--output-dir", str(output), *arguments],
+        cwd=tmp_path, capture_output=True, text=True,
+    )
+    assert result.returncode == 2
+    assert "repository" in result.stderr
+    assert not output.exists()
+
+
+@pytest.fixture
+def public_installer(tmp_path):
+    release_builder.build(tmp_path, repository=PUBLIC_REPOSITORY)
+    archive = tmp_path / f"penczreq-installer-{__version__}.tar.gz"
+    checksum = archive.with_name(f"{archive.name}.sha256")
+    assert checksum.read_text(encoding="ascii") == f"{file_digest(archive)}  {archive.name}\n"
+    with tarfile.open(archive) as package:
+        prefix = f"penczreq-installer-{__version__}/"
+        assert set(package.getnames()) == {prefix + name for name in installer_builder.FILES}
+        contents = {}
+        for member in package.getmembers():
+            name = member.name.removeprefix(prefix)
+            assert member.mode == (0o755 if name in {"installer.py", "install.sh"} else 0o644)
+            assert member.mtime == member.uid == member.gid == 0
+            contents[name] = package.extractfile(member).read().decode("utf-8")
+    return contents
+
+
+def load_packaged_installer(contents, monkeypatch):
+    module = ModuleType("penczreq_public_packaged_installer")
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    exec(compile(contents["installer.py"], "packaged/installer.py", "exec"), module.__dict__)
+    return module
+
+
+def test_public_installer_contains_resolved_locators_and_real_interactive_default(
+    public_installer, monkeypatch
+):
+    image = "ghcr.io/example-owner/penczreq:0.5.2"
+    assert json.loads(public_installer["answers.example.json"])["image"] == image
+    module = load_packaged_installer(public_installer, monkeypatch)
+    monkeypatch.setattr(module, "_prompt", lambda _label, default: default)
+    assert module.interactive_answers()["image"] == image
+    assert "https://github.com/example-owner/penczREQ/releases/download/v0.5.2" in (
+        public_installer["INSTALL.md"]
+    )
+    assert image in public_installer["INSTALL.md"]
+    for content in public_installer.values():
+        assert "ghcr.io/<owner>/" not in content
+        assert "github.com/<owner>/" not in content
+    original = (ROOT / "deploy/truenas/installer.py").read_text(encoding="utf-8")
+    assert public_installer["installer.py"].replace(
+        image, "ghcr.io/<owner>/penczreq:0.5.2"
+    ) == original
+
+
+def test_public_installer_still_rejects_manual_placeholder_before_mutations(
+    public_installer, monkeypatch
+):
+    module = load_packaged_installer(public_installer, monkeypatch)
+    monkeypatch.setattr(module, "_ensure_truenas_runtime", lambda: None)
+
+    class ReachedTargetValidation(Exception):
+        pass
+
+    def stop_at_target(_config):
+        raise ReachedTargetValidation
+
+    monkeypatch.setattr(module, "_validate_app_target", stop_at_target)
+    for image in ("ghcr.io/<owner>/penczreq:0.5.2", "ghcr.io/OWNER/penczreq:0.5.2"):
+        with pytest.raises(module.InstallerError, match="placeholder"):
+            module.execute(SimpleNamespace(image=image), "unused")
+    # A real owner must pass the unchanged guard; all NAS operations remain unreachable.
+    with pytest.raises(ReachedTargetValidation):
+        module.execute(SimpleNamespace(image="ghcr.io/example-owner/penczreq:0.5.2"), "unused")
+
+
+def test_public_locator_rendering_rejects_unknown_locator_without_rewriting_guard():
+    identity = installer_builder.ReleaseIdentity(PUBLIC_REPOSITORY)
+    guard = b'if "<owner>" in config.image or "OWNER" in config.image:'
+    assert installer_builder.render_public_locators("installer.py", guard, identity) == guard
+    with pytest.raises(ValueError, match="Unresolved public locator"):
+        installer_builder.render_public_locators(
+            "installer.py", b"ghcr.io/<owner>/unexpected-package:0.5.2", identity
+        )
+
+
+def test_workflows_build_public_artifacts_with_explicit_runtime_repository():
+    for filename, expected_outputs in (
+        ("ci.yml", ["dist/first", "dist/second"]), ("release.yml", ["dist"])
+    ):
+        _, document = workflow(filename)
+        commands = [
+            shlex.split(line)
+            for job in document["jobs"].values()
+            for step in job["steps"]
+            for line in step.get("run", "").splitlines()
+            if line.startswith("python tools/build_release_artifacts.py ")
+        ]
+        assert [argv[argv.index("--output-dir") + 1] for argv in commands] == expected_outputs
+        assert all(argv[argv.index("--repository") + 1] == "${GITHUB_REPOSITORY}" for argv in commands)
+
+
+def test_release_upload_selects_repository_without_publish_checkout():
+    _, document = workflow("release.yml")
+    publish = document["jobs"]["publish"]
+    assert not any("checkout" in step.get("uses", "") for step in publish["steps"])
+    upload = [line for step in publish["steps"] for line in step.get("run", "").splitlines()
+              if line.startswith("gh release upload ")]
+    assert len(upload) == 1
+    argv = shlex.split(upload[0])
+    assert argv[argv.index("--repo") + 1] == "${GITHUB_REPOSITORY}"
+    assert publish["permissions"] == {
+        "actions": "read", "contents": "write", "packages": "write",
+    }
+
+
+def test_offline_inspect_matches_built_and_exported_release_image(public_installer):
+    _, document = workflow("release.yml")
+    steps = document["jobs"]["verify"]["steps"]
+    build = next(step["run"] for step in steps if step["name"] == "Build and smoke-test the release image")
+    seal = next(step["run"] for step in steps if step["name"] == "Seal the verified image and evidence")
+    assert 'owner="${GITHUB_REPOSITORY_OWNER,,}"' in build
+    image = re.search(r'^image="([^"]+)"$', build, re.MULTILINE).group(1)
+    assert image == "ghcr.io/${owner}/penczreq:${version}"
+    save = shlex.split(next(line for line in seal.splitlines() if line.startswith("docker save ")))
+    assert save[:4] == ["docker", "save", "--output", "${image_archive}"]
+    assert len(save) == 5  # Only the canonical registry reference, no extra local alias.
+
+    def resolve(reference):
+        owner = PUBLIC_REPOSITORY.split("/")[0].lower()
+        return reference.replace("${owner}", owner).replace(
+            "${GITHUB_REPOSITORY_OWNER,,}", owner
+        ).replace("${version}", __version__)
+
+    source = (ROOT / "deploy/truenas/INSTALL.md").read_text(encoding="utf-8")
+    assert "sudo docker image inspect ghcr.io/<owner>/penczreq:0.5.2" in source
+    inspected = re.search(r"^sudo docker image inspect (\S+)$", public_installer["INSTALL.md"], re.MULTILINE).group(1)
+    assert inspected == resolve(save[-1]) == resolve(image)
 
 
 def test_title_en_schema_change_is_explicitly_a_versioned_migrator_release():

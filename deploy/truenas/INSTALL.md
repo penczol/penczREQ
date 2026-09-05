@@ -106,7 +106,7 @@ opublikowanej sumy SHA-256 operator importuje Docker archive i potwierdza tag:
 ```sh
 sha256sum -c penczreq-0.5.2-docker-amd64.tar.sha256
 sudo docker load -i penczreq-0.5.2-docker-amd64.tar
-sudo docker image inspect penczreq:0.5.2
+sudo docker image inspect ghcr.io/<owner>/penczreq:0.5.2
 ```
 
 ```sh
