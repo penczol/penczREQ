@@ -288,8 +288,8 @@ def test_image_runs_as_unprivileged_user_with_pinned_runtime():
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
 
     assert (
-        "FROM python:3.12.13-slim-bookworm@sha256:"
-        "8a7e7cc04fd3e2bd787f7f24e22d5d119aa590d429b50c95dfe12b3abe52f48b"  # pragma: allowlist secret
+        "FROM python:3.12.14-slim-trixie@sha256:"
+        "78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea"  # pragma: allowlist secret
     ) in dockerfile
     assert "USER 568:568" in dockerfile
     assert "HEALTHCHECK " in dockerfile
