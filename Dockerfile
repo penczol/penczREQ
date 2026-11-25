@@ -3,6 +3,7 @@ FROM python:3.12.14-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c
 ARG APP_VERSION=0.5.2
 ARG BUILD_DATE=unknown
 ARG VCS_REF=unknown
+ARG BUILD_ID
 ARG VCS_URL=local://penczreq
 
 LABEL org.opencontainers.image.title="penczREQ" \
@@ -31,7 +32,7 @@ RUN python -m pip install --no-cache-dir --requirement requirements.lock \
               /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
 COPY --chown=568:568 request_app ./request_app
 
-RUN printf '%s\n' "${VCS_REF}" > request_app/_build_revision
+RUN printf '%s\n' "${BUILD_ID:-$VCS_REF}" > request_app/_build_revision
 
 USER 568:568
 EXPOSE 8000 8001

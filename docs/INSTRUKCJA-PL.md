@@ -172,14 +172,7 @@ legacy. Nie jest wymagany dla nowego użytkownika rozpoczynającego od 0.5.2.
 Szczegółowa instrukcja jest w
 [`../deploy/truenas/INSTALL.md`](../deploy/truenas/INSTALL.md).
 
-Prosta aktualizacja obrazu jest dopuszczalna tylko bez zmian Compose, portów,
-mountów, sekretów i kontraktu baz. Zmiana któregokolwiek z tych elementów wymaga
-wersjonowanego migratora, kontroli obu baz, ich spójnej kopii, snapshotu ZFS i
-zapisanego planu rollbacku. Numerowany tag obrazu jest kotwicą rollbacku;
-`:stable` wskazuje zatwierdzone wydanie zgodne z linią 0.5.2. Zarejestrowana
-aplikacja śledząca ten tag może otrzymywać zgodne aktualizacje przez Apps → Update.
-Przejście między niezgodnymi liniami wymaga migratora. Szczegóły opisuje
-[`UPDATE.md`](UPDATE.md).
+Wybierz aplikację i **Update**. Control zabezpiecza obie bazy przed zapisem nowego buildu i wykonuje zgodne migracje przy starcie. Produkcja śledzi `:stable`, a odseparowana instancja testowa `:uat`. [Przekazanie z 0.5.2 i odzyskiwanie](UPDATE.md).
 
 ## Testy i diagnostyka
 

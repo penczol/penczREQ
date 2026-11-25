@@ -786,6 +786,11 @@ def execute(
     existing = _validate_app_target(config)
     if local_image:
         _ensure_local_image_available(config.image)
+    if config.mode == "upgrade" and (config.root_path / "app" / "app.db").is_file():
+        control_dir = config.root_path / "control"
+        if not (control_dir / ".migrations.db").is_file():
+            if existing.get("state") != "STOPPED" or not (control_dir / ".legacy-writers-stopped").is_file():
+                raise InstallerError("Zatrzymaj writerów legacy i potwierdź przekazanie w .legacy-writers-stopped.")
     _ensure_datasets(config)
     rollback = None
     if config.mode == "upgrade":

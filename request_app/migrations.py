@@ -10,6 +10,9 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 
 from . import __version__
+from .audit import SecurityAudit
+from .auth_protection import LoginProtection
+from .repository import Repository
 from .control_store import ControlStore
 from .database import Database
 
@@ -180,6 +183,8 @@ def coordinate(settings, release=RELEASE):
                 raise MigrationError("Recovery journal does not match the ready release")
             validate_pair(paths, installation)
             return
+    if ready_path(settings).exists() and not journal_path.is_file():
+        raise MigrationError("Missing Control journal for an enrolled installation")
     with gate(settings.data_dir, exclusive=True), database(journal_path, "rwc") as journal:
         journal.row_factory = sqlite3.Row
         journal.execute("PRAGMA synchronous=FULL")
@@ -222,10 +227,12 @@ def coordinate(settings, release=RELEASE):
                             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
                         ).fetchone():
                             raise MigrationError("Unrecognized legacy database")
-            if origin == "update" and all(schema(p) == SCHEMA_VERSION for p in paths.values()):
-                validate_pair(paths, installation)
-            if origin == "update" and any(schema(p) > SCHEMA_VERSION for p in paths.values()):
-                raise MigrationError("Newer schema requires manual migration")
+            if origin == "update":
+                revisions = {schema(path) for path in paths.values()}
+                if len(revisions) != 1 or max(revisions) > SCHEMA_VERSION:
+                    raise MigrationError("Inconsistent or newer schemas require manual inspection")
+                if revisions == {SCHEMA_VERSION}:
+                    validate_pair(paths, installation)
             with journal:
                 run = journal.execute("INSERT INTO runs(target,origin,phase) VALUES (?,?,?)",
                                       (release, origin, "preparing")).lastrowid
@@ -233,6 +240,8 @@ def coordinate(settings, release=RELEASE):
             row = journal.execute("SELECT * FROM runs WHERE id=?", (run,)).fetchone()
         run, phase = row["id"], row["phase"]
         folder = settings.backups_dir / "pre-update" / f"{installation}-{run}"
+        if phase not in ("preparing", "applying", "restoring"):
+            raise MigrationError("Unknown migration phase; inspect the Control journal")
         if phase in ("applying", "restoring"):
             recover(journal, run, folder, paths, json.loads(row["hashes"]))
             raise MigrationError("Interrupted migration restored; review before retry")
@@ -245,11 +254,25 @@ def coordinate(settings, release=RELEASE):
                 target = folder / (name + ".db")
                 backup_file(path, target)
                 hashes[name] = digest(target)
-            write_json(folder / "manifest.json", {"release": release, "run": run, "sha256": hashes})
+            previous = journal.execute(
+                "SELECT target FROM runs WHERE phase='ready' AND id < ? ORDER BY id DESC LIMIT 1",
+                (run,),
+            ).fetchone()
+            manifest = {"target_release": release, "source_release": previous[0] if previous else "legacy",
+                        "run": run, "installation": installation, "sha256": hashes,
+                        "source_schemas": {name: schema(folder / (name + ".db")) for name in STORES}}
+            write_json(folder / "manifest.json", manifest)
             transition(journal, run, "applying", hashes)
         try:
             for name, path in paths.items():
                 apply_schema(path, name, settings.control_session_secret, installation)
+            app_db = Database(paths["app"])
+            audit = SecurityAudit(app_db, settings.logs_dir)
+            LoginProtection(app_db, audit).migrate_legacy_lockouts()
+            upgraded = Repository(app_db).require_password_policy_upgrade()
+            if upgraded:
+                audit.emit("password_policy_upgrade_required", severity="warning",
+                           details={"accounts": upgraded, "minimum_length": 15})
             validate_pair(paths, installation)
         except Exception:
             if row["origin"] != "fresh":

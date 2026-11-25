@@ -128,6 +128,35 @@ def test_packaged_update_channel(tmp_path, monkeypatch, version, baseline, chang
             installer_builder.update_policy()
 
 
+def test_manual_migration_publishes_only_a_numbered_artifact(tmp_path, monkeypatch):
+    manual = {"version": "0.5.2", "channel_baseline": "0.5.2",
+              "database_schema_changes": [], "update_mode": "manual"}
+    monkeypatch.setattr(installer_builder, "update_policy", lambda: manual)
+    monkeypatch.setattr(release_builder, "update_policy", lambda: manual)
+    release_builder.build(tmp_path, repository=PUBLIC_REPOSITORY)
+    manifest = json.loads((tmp_path / "release-manifest.json").read_text())
+    assert manifest["image"]["moving"] is None
+    assert manifest["update_policy"]["current_release_requires_migrator"] is True
+    assert installer_builder.ReleaseIdentity(PUBLIC_REPOSITORY).stable_image.endswith(":0.5.2")
+    text, _ = workflow("release.yml")
+    assert 'manual) test -z "$stable"' in text
+    assert "if: env.CHANNEL_IMAGE != ''" in text
+
+
+def test_uat_publishes_only_on_an_explicit_request():
+    text, document = workflow("uat.yml")
+    assert set(document["on"]) == {"push", "workflow_dispatch"}
+    assert document["on"]["push"]["branches"] == ["codex/truenas-update-uat"]
+    assert "github.event.head_commit.message == 'Publish tested UAT image'" in text
+    assert "git diff --quiet HEAD^ HEAD" in text
+    assert document["permissions"] == {"contents": "read"}
+    publish = document["jobs"]["publish"]
+    assert publish["needs"] == "verify" and publish["permissions"]["packages"] == "write"
+    assert "checkout@" not in str(publish) and "stable" not in text
+    assert 'docker push "$ref"' in text and '-t "$repo:uat"' in text
+    assert "tools/container-smoke.sh" in text and "publication_gate.py" in text
+
+
 def test_release_artifacts_are_deterministic_and_self_verifying(tmp_path):
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -549,7 +578,7 @@ def test_documentation_defines_release_update_and_privacy_boundaries():
     )
     assert "AGPL-3.0-only" in readme
     assert "No license has been selected yet" not in readme
-    assert "An image-only update" in readme
+    assert all(term in readme for term in (":stable", ":uat", "before a new build writes"))
     assert "private management plane" in readme
     assert "English user and administrator guide" in readme
     assert "Polska instrukcja użytkownika i administratora" in readme

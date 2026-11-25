@@ -54,12 +54,11 @@ numbered manifest by digest to the channel and reads its digest back.
    `deploy/truenas/update-policy.json` for that version. Keep the channel
    baseline only after testing an image-only update from the oldest supported
    release and the preceding release. Check both services and rollback.
-2. For any incompatible change listed below, set the baseline to the new
-   version. List schema changes in the policy. Packaging assigns a separate
-   `stable-X.Y.Z` tag to the new baseline and its compatible successors.
-   The old channel stays on its last compatible release until its operator
-   backs up, runs the versioned migrator, verifies the result and enrolls in
-   the new channel. A version change without a policy review fails packaging.
+2. Declare `update_mode: automatic` when the image safely handles every
+   supported source schema and enrolled host configuration. List schema steps
+   in `database_schema_changes`. Choose `manual` for a genuinely incompatible
+   update. The publisher then produces only the numbered image and release
+   assets. Its manifest has no moving reference and stable promotion is skipped.
 3. After reviewed changes reach main and CI passes, check Settings →
    Environments → release → Deployment branches and tags. When the environment
    uses individual tag rules, add the exact approved tag `vX.Y.Z` and retain
@@ -72,22 +71,61 @@ numbered manifest by digest to the channel and reads its digest back.
    under an existing numbered tag stops publication. Resume a failed publish
    from the sealed candidate while it is available.
 
-## Simple image-only update
+## Production and permanent UAT
 
-An image-only update is eligible only when all of the following remain
-compatible:
+Production follows `:stable`. The permanent test installation follows `:uat`.
+Each Custom App registers both services against its own tag and uses Apps → Update.
+Give UAT independent datasets, env, secrets, ports and synthetic accounts.
+Set `WEB_PUSH_DELIVERY=disabled` in its Public service. Development stays on
+the workstation. UAT runs the published image and its own persistent test data.
 
-- Compose service shape and entry points;
-- published ports and access modes;
-- mounts, ownership and writable paths;
-- required environment variables and secrets;
-- Public/Control database schema and shared configuration contract;
-- backup and rollback semantics.
+Codex deliberately runs **Publish tested UAT image** on an allowed reviewed ref.
+Before the workflow reaches the default branch, an empty commit named exactly
+`Publish tested UAT image` on `codex/truenas-update-uat` triggers the same job.
+Ordinary commits skip publication. A read-only job checks public source,
+secrets and tests, builds the candidate and runs both containers. The publisher
+loads the verified archive, pushes a unique `uat-RUN_ID-ATTEMPT` reference,
+promotes its digest to `:uat` and verifies the resulting digest. Production
+retains the separate protected release workflow and its security gates.
 
-The operator still records the currently running digest, validates both
-databases and creates fresh paired backups before changing the image reference.
-For routine updates use the reviewed channel from the release manifest in
-both services. Leave the registered YAML, env files and bind mounts in place.
+## Automatic migrations and recovery
+
+Control creates both databases on a fresh install. A new application version or
+baked image revision triggers a verified backup pair before any application
+database mutation. Restarting the same ready build checks both schemas without
+another pre-update backup. Public, CLI and background workers hold shared locks
+on the same SQLite lock file under /data. Control needs exclusive access for a
+migration. Use local filesystems with SQLite locking and keep every writer within
+this single-host protocol. Never replace or unlink the lock file during use.
+
+Control records runs and transitions in /control-data/.migrations.db. Each SQLite
+store records its schema version and installation identity. Control applies
+missing steps in sequence, checks integrity, foreign keys and both identities,
+then commits ready and opens access for the exact build. A committed ready state
+is terminal. A missing ready marker can be recreated without restoring data.
+The SQLite Backup API includes committed WAL contents. Keep the protected pairs
+and checksums in /backups/pre-update until their rollback window has passed.
+Daily retention only prunes ordinary backup files. Host recovery should include
+both datasets, the private journal, matching env, keys and previous image.
+
+**First adoption from historical 0.5.2.** Stop the old Custom App and every CLI
+or external writer sharing its data. Verify STOPPED and take a paired backup
+and recursive snapshot. While stopped create an empty .legacy-writers-stopped
+file in the host directory mounted as /control-data. Update the registered
+image, then start both services. Keep the old processes stopped throughout
+handover and any interrupted retries. They cannot observe the new lock.
+Subsequent enrolled builds require no marker.
+
+**Interruption.** If backup fails, both original stores remain unchanged.
+Free space and restart the same build. During applying or restoring, Control
+verifies the original pair before restoring both stores. Another interruption
+repeats recovery from the same pair. Damaged backups keep readiness closed.
+After successful recovery the run is marked failed. Inspect the Control log
+and journal, correct the cause and explicitly authorize retry by creating
+.retry-migration-N in /control-data for the reported run N. A corrected build
+may start a new run after restoration. Once writes have been admitted, restoring
+an older point requires an operator decision. For local development start Control before Public or the CLI. No application container needs
+access to SSH, ZFS, the NAS API or the Docker socket.
 
 ### Updating in TrueNAS Apps
 
@@ -130,9 +168,9 @@ The test did not measure the background registry polling interval.
 
 ## Versioned migrator
 
-A versioned migrator is mandatory if any of these change:
+A separate operator-run migrator is required for changes beyond the image contract, for example:
 
-- database schema, migration order or cross-database assumptions;
+- an unsupported starting schema or ambiguity requiring a human data decision;
 - Compose, service names, ports, mounts, datasets or permissions;
 - secret names, formats, encryption keys or bootstrap contract;
 - access-mode, trusted-proxy or forwarded-header contract;

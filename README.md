@@ -213,16 +213,7 @@ Control creates and verifies a transactionally consistent pair of the Public
 and Control SQLite databases. Restore both databases from the same backup set
 after changes involving accounts, configuration, or security state.
 
-The TrueNAS upgrade workflow validates both databases, creates paired backups
-and a recursive ZFS snapshot, records rollback metadata, and preserves existing
-secrets. An image-only update is appropriate only while Compose, ports, mounts,
-secrets, proxy behavior, and database contracts remain compatible.
-
-For compatible releases, select the installed custom app in TrueNAS Apps and
-use **Update** when a new channel image is detected. Both services keep the
-same YAML, data mounts and env files. Read the [update and rollback model](docs/UPDATE.md) before upgrading. Keep the
-previous numbered image as the rollback anchor; do not treat the moving
-`:stable` tag as one.
+Production follows `:stable`. Permanent isolated UAT follows `:uat`. Both use TrueNAS Apps → Update. Control protects the database pair before a new build writes and runs compatible migrations. See the [update, legacy handover and recovery procedure](docs/UPDATE.md).
 
 ## Documentation
 

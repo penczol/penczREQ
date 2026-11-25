@@ -136,13 +136,6 @@ async def serving():
         repo.require_admin_exists()
     else:
         repo.enforce_roles(settings.public_admin_username, settings.public_admin_bootstrap_password)
-    login_protection.migrate_legacy_lockouts()
-    upgraded_accounts = repo.require_password_policy_upgrade()
-    if upgraded_accounts:
-        audit.emit(
-            "password_policy_upgrade_required", severity="warning",
-            details={"accounts": upgraded_accounts, "minimum_length": 15},
-        )
     push_service.initialize()
     public_update, admin_update = update_notification_bodies(APP_VERSION, "pl")
     public_update_en, admin_update_en = update_notification_bodies(APP_VERSION, "en")

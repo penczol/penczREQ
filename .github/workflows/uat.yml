@@ -37,7 +37,7 @@ jobs:
       - name: Build and smoke-test the candidate
         run: |
           version="$(python -c 'from request_app import __version__; print(__version__)')"
-          docker build --build-arg "APP_VERSION=$version" --build-arg "VCS_REF=$GITHUB_SHA" --build-arg "VCS_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" -t penczreq:uat-candidate .
+          docker build --build-arg "APP_VERSION=$version" --build-arg "VCS_REF=$GITHUB_SHA" --build-arg "BUILD_ID=$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --build-arg "VCS_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" -t penczreq:uat-candidate .
           bash tools/inspect-image.sh penczreq:uat-candidate
           bash tools/container-smoke.sh penczreq:uat-candidate
           docker save -o candidate.tar penczreq:uat-candidate

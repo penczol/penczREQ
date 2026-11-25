@@ -25,7 +25,7 @@ def settings(root):
     app, control, backups = paths
     return SimpleNamespace(data_dir=app, database_path=app / "app.db", control_data_dir=control,
                            control_database_path=control / "control.db", backups_dir=backups,
-                           control_session_secret=secrets.token_hex(32))
+                           logs_dir=app / "logs", control_session_secret=secrets.token_hex(32))
 
 
 def dump(path):
@@ -202,6 +202,42 @@ class StartupMigrationTests(unittest.TestCase):
         (self.cfg.control_data_dir / ".retry-migration-2").touch()
         m.coordinate(self.cfg, "B")
         self.assertEqual(self.phase(), "ready")
+
+    def test_crash_after_sealing_pair_before_any_schema_change(self):
+        m.coordinate(self.cfg, "A")
+        before = self.pair()
+        self.crash("applying")
+        self.assertEqual(before, self.pair())
+        self.crash("failed")
+        self.assertEqual(self.phase(), "failed")
+        self.assertEqual(before, self.pair())
+
+    def test_second_schema_step_failure_restores_the_original_pair(self):
+        m.coordinate(self.cfg, "A")
+        before = self.pair()
+        original = m.apply_schema
+
+        def fail(path, name, *args):
+            original(path, name, *args)
+            if name == "app":
+                with m.database(path, "rw") as db, db:
+                    db.execute("CREATE TABLE not_committed_to_users(id INTEGER)")
+            else:
+                raise m.MigrationError("test failure")
+        with patch.object(m, "apply_schema", fail), self.assertRaisesRegex(m.MigrationError, "test failure"):
+            m.coordinate(self.cfg, "B")
+        self.assertEqual(self.phase(), "failed")
+        self.assertEqual(before, self.pair())
+
+    def test_inconsistent_or_future_store_fails_before_backup(self):
+        m.coordinate(self.cfg, "A")
+        with m.database(self.paths[1], "rw") as db:
+            db.execute("PRAGMA user_version=80")
+        before = self.pair()
+        with self.assertRaisesRegex(m.MigrationError, "schemas"):
+            m.coordinate(self.cfg, "B")
+        self.assertFalse(list(self.cfg.backups_dir.rglob("manifest.json")))
+        self.assertEqual(before, self.pair())
 
     def test_damaged_backup_stops_before_restoring_either_file(self):
         m.coordinate(self.cfg, "A")

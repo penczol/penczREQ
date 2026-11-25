@@ -252,10 +252,13 @@ aktualna, instalator zachowuje jej bajty i naprawia wyłącznie metadane do
 
 ## Prosta aktualizacja obrazu a migrator
 
-Samo wskazanie nowszego obrazu jest dozwolone wyłącznie wtedy, gdy zgodne
-pozostają: Compose i entrypointy, porty, mounty i uprawnienia, wymagane zmienne
-oraz sekrety, schemat obu baz i kontrakt kopii/rollbacku. Także wtedy operator
-zapisuje aktualny digest, wykonuje kontrole obu baz i tworzy świeżą parę kopii.
+Control wykonuje typowe migracje przy starcie. Przed zapisem nowego buildu
+zabezpiecza obie bazy w /backups/pre-update. Public, CLI i zadania w tle
+respektują wspólną blokadę. Przy pierwszym przejściu z historycznej 0.5.2
+zatrzymaj aplikację i CLI, potwierdź STOPPED i wykonaj kopię oraz snapshot.
+W katalogu montowanym jako /control-data utwórz pusty plik .legacy-writers-stopped.
+Utrzymuj starą aplikację zatrzymaną aż do zakończenia przekazania.
+
 W nowej instalacji ze śledzeniem aktualizacji oba serwisy wskazują
 `ghcr.io/<owner>/penczreq:stable` dla linii zgodnej z 0.5.2.
 Użyj wygenerowanego YAML i istniejących na NAS plików env oraz host paths.
@@ -284,10 +287,10 @@ i pliki env. Jeśli potrzebna jest migracja, wykonaj ją najpierw instalatorem
 z numerowanym obrazem. Panel Apps nie uruchamia naszego instalatora.
 Nie przywraca też host paths przy rollbacku aplikacji.
 
-Zmiana Compose, portów, datasetów, mountów, sekretów, schematu, kolejności
-migracji, trusted proxy albo metadanych Custom App wymaga wersjonowanego
-migratora. Dry-run migratora musi zakończyć się `mutations_performed: false`, nie
-może generować prawdziwych sekretów ani wywoływać metod mutujących TrueNAS.
+Stała instancja UAT używa `:uat` w obu serwisach oraz własnych datasetów,
+portów, kont i plików env. W Public ustaw WEB_PUSH_DELIVERY=disabled. Oba
+kanały używają Apps → Update. Osobny migrator obsługuje zmiany wymagające
+interwencji operatora, np. nowego montowania lub niedostępnego klucza.
 
 Schemat pierwszego publicznego wydania 0.5.2 zawiera nullable
 `requests.title_en`. Upgrade `0.4.3 -> 0.5.2` nie jest prostą aktualizacją image-only.
