@@ -178,12 +178,13 @@ jobs:
           version="${GITHUB_EVENT_RELEASE_TAG_NAME#v}"
           image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/penczreq:${version}"
           repo="${image%:*}"
-          stable="$(jq -er '.image.moving' dist/release-manifest.json)"
-          baseline="$(jq -er '.update_policy.channel_baseline' dist/release-manifest.json)"
-          [[ "$baseline" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          expected="$repo:stable"
-          if [[ "$baseline" != 0.5.2 ]]; then expected="$repo:stable-$baseline"; fi
-          test "$stable" = "$expected"
+          stable="$(jq -r '.image.moving // empty' dist/release-manifest.json)"
+          mode="$(jq -er '.update_policy.update_mode' dist/release-manifest.json)"
+          case "$mode" in
+            automatic) test "$stable" = "$repo:stable" ;;
+            manual) test -z "$stable" ;;
+            *) exit 1 ;;
+          esac
           test "$(jq -er '.image.immutable' dist/release-manifest.json)" = "$image"
           printf '%s' "${GHCR_TOKEN}" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
           # Only an explicit missing-manifest response means the tag is new.
@@ -193,13 +194,13 @@ jobs:
             cat lookup.err >&2; exit 1
           }
           candidate="$(docker image inspect --format '{{.Id}}' "$image")"
-          if exists "$stable"; then
+          if [[ -n "$stable" ]] && exists "$stable"; then
             docker pull "$stable"
             current="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' "$stable")"
             [[ "$current" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
             test "$(printf '%s\n' "$current" "$version" | sort -V | tail -1)" = "$version"
-          else
-            test "$version" = "$baseline"
+          elif [[ -n "$stable" ]]; then
+            test "$version" = "0.5.2"
           fi
           if exists "$image"; then
             docker pull "$image"
@@ -236,6 +237,7 @@ jobs:
           for asset in "${assets[@]}"; do test -f "${asset}"; done
           gh release upload "${GITHUB_EVENT_RELEASE_TAG_NAME}" "${assets[@]}" --clobber --repo "${GITHUB_REPOSITORY}"
       - name: Promote the published manifest to its compatible channel
+        if: env.CHANNEL_IMAGE != ''
         run: |
           source="$(cat dist/image-digest.txt)"
           docker buildx imagetools create --prefer-index=false --tag "$CHANNEL_IMAGE" "$source"

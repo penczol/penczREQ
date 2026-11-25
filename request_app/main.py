@@ -17,6 +17,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .migrations import writer_session, writer_thread
 from . import __version__
 from .config import Settings, load_settings
 from .audit import SecurityAudit
@@ -109,7 +110,7 @@ async def maintenance_loop() -> None:
 async def push_loop() -> None:
     while True:
         try:
-            await asyncio.to_thread(push_service.deliver_pending)
+            await writer_thread(settings, push_service.deliver_pending)
         except Exception:
             logger.exception("Nie udało się przetworzyć kolejki Web Push.")
         await asyncio.sleep(3)
@@ -117,7 +118,13 @@ async def push_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    db.initialize()
+    with writer_session(settings):
+        async with serving():
+            yield
+
+
+@asynccontextmanager
+async def serving():
     if db.quick_check() != "ok":
         raise RuntimeError("Baza aplikacji nie przeszła kontroli integralności.")
     secure_config.initialize(
@@ -456,7 +463,7 @@ async def set_language(
     user = request.state.user
     if user:
         verify_csrf(request, user, csrf_token)
-        await asyncio.to_thread(repo.set_user_language, user["id"], language)
+        await writer_thread(settings, repo.set_user_language, user["id"], language)
     destination = next_path if next_path.startswith("/") and not next_path.startswith("//") else "/"
     response = RedirectResponse(destination, status_code=303)
     set_language_cookie(response, language)
@@ -482,9 +489,9 @@ async def login(
         request.state.language,
     )
     if len(username) > 64 or len(password) > 128:
-        await asyncio.to_thread(login_protection.record_failure, ip, normalized)
+        await writer_thread(settings, login_protection.record_failure, ip, normalized)
         return render_login_page(request, status_code=401, error=generic_error)
-    gate = await asyncio.to_thread(login_protection.check, ip, normalized)
+    gate = await writer_thread(settings, login_protection.check, ip, normalized)
     if gate.blocked:
         response = render_login_page(request, status_code=429, error=generic_error)
         response.headers["Retry-After"] = str(gate.retry_after)
@@ -492,15 +499,15 @@ async def login(
     if gate.delay_seconds:
         await asyncio.sleep(gate.delay_seconds)
     async with auth_semaphore:
-        user = await asyncio.to_thread(repo.authenticate, normalized, password, ip)
+        user = await writer_thread(settings, repo.authenticate, normalized, password, ip)
     if not user:
-        failure_gate = await asyncio.to_thread(login_protection.record_failure, ip, normalized)
+        failure_gate = await writer_thread(settings, login_protection.record_failure, ip, normalized)
         status_code = 429 if failure_gate.blocked else 401
         response = render_login_page(request, status_code=status_code, error=generic_error)
         if failure_gate.blocked:
             response.headers["Retry-After"] = str(failure_gate.retry_after)
         return response
-    await asyncio.to_thread(login_protection.record_success, ip, normalized)
+    await writer_thread(settings, login_protection.record_success, ip, normalized)
     audit.emit(
         "login_success", actor_type="public_user", actor_id=user["id"],
         username=user["username"], ip_address=ip,
@@ -566,13 +573,13 @@ async def force_password(
         error = localize_message("Wprowadzone hasła nie są identyczne.", request.state.language)
     else:
         try:
-            await asyncio.to_thread(repo.set_password, user["id"], new_password, force_change=False)
+            await writer_thread(settings, repo.set_password, user["id"], new_password, force_change=False)
         except RepositoryError as exc:
             error = localize_message(str(exc), request.state.language)
     if error:
         return render_page(request, "force_password.html", status_code=400, error=error)
-    await asyncio.to_thread(delete_other_sessions, db, user["id"])
-    session = await asyncio.to_thread(
+    await writer_thread(settings, delete_other_sessions, db, user["id"])
+    session = await writer_thread(settings,
         create_session, db, user["id"], secret=settings.session_secret, days=settings.session_days
     )
     audit.emit(
@@ -913,12 +920,12 @@ async def api_change_password(body: PasswordBody, request: Request, user=Depends
     verify_csrf(request, user)
     if body.new_password != body.confirm_password:
         raise RepositoryError("Wprowadzone hasła nie są identyczne.")
-    await asyncio.to_thread(
+    await writer_thread(settings,
         repo.set_password, user["id"], body.new_password,
         current_password=body.current_password, force_change=False,
     )
-    await asyncio.to_thread(delete_other_sessions, db, user["id"])
-    session = await asyncio.to_thread(
+    await writer_thread(settings, delete_other_sessions, db, user["id"])
+    session = await writer_thread(settings,
         create_session, db, user["id"], secret=settings.session_secret, days=settings.session_days
     )
     audit.emit(

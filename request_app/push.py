@@ -376,7 +376,7 @@ class PushService:
         limit: int = 100,
         sender: Callable[[dict[str, Any], str], None] | None = None,
     ) -> int:
-        if not self._public_key:
+        if os.getenv("WEB_PUSH_DELIVERY", "enabled") != "enabled" or not self._public_key:
             return 0
         send = sender or self._send
         delivered = 0

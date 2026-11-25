@@ -43,15 +43,15 @@ def build(output_dir: Path, *, repository: str) -> tuple[Path, ...]:
                 "version": VERSION,
                 "image": {
                     "immutable": identity.versioned_image,
-                    "moving": identity.stable_image,
+                    "moving": identity.stable_image if policy["update_mode"] == "automatic" else None,
                 },
                 "update_policy": {
                     "stable_requires_approved_release": True,
                     "main_push_updates_production": False,
                     "numbered_image_is_rollback_anchor": True,
-                    "compose_or_schema_change_requires_migrator": True,
+                    "update_mode": policy["update_mode"],
                     "channel_baseline": policy["channel_baseline"],
-                    "current_release_requires_migrator": VERSION == policy["channel_baseline"],
+                    "current_release_requires_migrator": policy["update_mode"] == "manual",
                     "database_schema_changes": policy["database_schema_changes"],
                 },
                 "artifacts": [

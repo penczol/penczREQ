@@ -46,8 +46,10 @@ def update_policy() -> dict:
     changes = policy["database_schema_changes"]
     if not isinstance(changes, list) or not all(isinstance(item, str) and item for item in changes):
         raise ValueError("Invalid database schema change list")
-    if changes and baseline != VERSION:
-        raise ValueError("A database migration must start a new update channel")
+    if policy.get("update_mode") not in ("automatic", "manual"):
+        raise ValueError("Review automatic migration compatibility")
+    if policy["update_mode"] == "automatic" and baseline != "0.5.2":
+        raise ValueError("Automatic releases must support the oldest stable installation")
     return policy
 
 
@@ -84,9 +86,9 @@ class ReleaseIdentity:
     @property
     def stable_image(self) -> str:
         owner = self.github_repository.split("/")[0].lower()
-        baseline = update_policy()["channel_baseline"]
-        tag = "stable" if baseline == "0.5.2" else f"stable-{baseline}"
-        return f"ghcr.io/{owner}/penczreq:{tag}"
+        if update_policy()["update_mode"] == "manual":
+            return self.versioned_image
+        return f"ghcr.io/{owner}/penczreq:stable"
 
 
 def render_public_locators(name: str, payload: bytes, identity: ReleaseIdentity) -> bytes:

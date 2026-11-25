@@ -31,6 +31,8 @@ RUN python -m pip install --no-cache-dir --requirement requirements.lock \
               /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
 COPY --chown=568:568 request_app ./request_app
 
+RUN printf '%s\n' "${VCS_REF}" > request_app/_build_revision
+
 USER 568:568
 EXPOSE 8000 8001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

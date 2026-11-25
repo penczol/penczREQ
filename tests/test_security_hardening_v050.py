@@ -48,7 +48,9 @@ from fastapi.testclient import TestClient
 component = os.environ["SECURITY_TEST_COMPONENT"]
 password = os.environ["SECURITY_TEST_PASSWORD"]
 if component == "public":
-    from request_app import main as target
+    from request_app import control, main as target
+    with TestClient(control.app):
+        pass
     client = TestClient(target.app, follow_redirects=False)
     username = "validation-admin"
     session_cookie = target.COOKIE_NAME

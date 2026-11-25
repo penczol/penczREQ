@@ -12,13 +12,14 @@ if docker image inspect "$image" --format '{{range .Config.Env}}{{println .}}{{e
   exit 1
 fi
 
-docker run --rm --entrypoint sh "$image" -c '
+version="$(docker image inspect "$image" --format '{{index .Config.Labels "org.opencontainers.image.version"}}')"
+docker run --rm -e "EXPECTED_VERSION=$version" --entrypoint sh "$image" -c '
   test "$(id -u)" = 568
   ! command -v pip
   ! test -e /app/tests
   ! test -e /app/tools
   ! test -e /app/deploy
-  python -c "from request_app import __version__; assert __version__ == \"0.5.2\""
+  python -c "from request_app import __version__; import os; assert __version__ == os.environ[\"EXPECTED_VERSION\"]"
   find /app -maxdepth 1 -mindepth 1 -printf "%f\n" | sort
 '
 

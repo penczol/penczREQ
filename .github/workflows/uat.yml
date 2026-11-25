@@ -1,0 +1,76 @@
+name: Publish tested UAT image
+on:
+  workflow_dispatch:
+  # Before this workflow reaches the default branch, GitHub does not register
+  # workflow_dispatch. Only a deliberate empty commit can request publication.
+  push:
+    branches: [codex/truenas-update-uat]
+permissions:
+  contents: read
+concurrency:
+  group: publish-penczreq-uat
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/codex/truenas-update-uat')) ||
+      (github.event_name == 'push' && github.event.head_commit.message == 'Publish tested UAT image')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify explicit branch trigger
+        if: github.event_name == 'push'
+        run: git diff --quiet HEAD^ HEAD
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.14'
+      - name: Verify public source and regression suite
+        run: |
+          python -m pip install -r requirements.lock -r requirements-ci.lock
+          python tools/publication_gate.py --require-license
+          python -m detect_secrets scan --no-verify $(git ls-files) > "$RUNNER_TEMP/secrets.json"
+          jq -e '.results == {}' "$RUNNER_TEMP/secrets.json"
+          python -m pytest -q
+      - name: Build and smoke-test the candidate
+        run: |
+          version="$(python -c 'from request_app import __version__; print(__version__)')"
+          docker build --build-arg "APP_VERSION=$version" --build-arg "VCS_REF=$GITHUB_SHA" --build-arg "VCS_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" -t penczreq:uat-candidate .
+          bash tools/inspect-image.sh penczreq:uat-candidate
+          bash tools/container-smoke.sh penczreq:uat-candidate
+          docker save -o candidate.tar penczreq:uat-candidate
+          sha256sum candidate.tar > candidate.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: tested-uat
+          path: |
+            candidate.tar
+            candidate.sha256
+          retention-days: 1
+  publish:
+    needs: verify
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: tested-uat
+      - name: Publish to the project UAT channel
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sha256sum -c candidate.sha256
+          docker load -i candidate.tar
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/penczreq"
+          ref="$repo:uat-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag penczreq:uat-candidate "$ref"
+          docker push "$ref"
+          digest="$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -er .digest)"
+          docker buildx imagetools create --prefer-index=false -t "$repo:uat" "$repo@$digest"
+          test "$(docker buildx imagetools inspect "$repo:uat" --format '{{json .Manifest}}' | jq -er .digest)" = "$digest"

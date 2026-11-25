@@ -104,16 +104,16 @@ def test_project_version_has_one_canonical_source():
 
 @pytest.mark.parametrize("version,baseline,changes,channel", [
     ("0.5.3", "0.5.2", [], "stable"),
-    ("0.6.0", "0.6.0", ["users.example"], "stable-0.6.0"),
-    ("0.6.1", "0.6.0", [], "stable-0.6.0"),
-    ("0.6.0", "0.5.2", ["users.example"], None),
+    ("0.6.0", "0.6.0", ["users.example"], None),
+    ("0.6.1", "0.6.0", [], None),
+    ("0.6.0", "0.5.2", ["users.example"], "stable"),
     ("0.5.3", "0.6.0", [], None),
     ("0.5.3", "latest", [], None),
 ])
 def test_packaged_update_channel(tmp_path, monkeypatch, version, baseline, changes, channel):
     monkeypatch.setattr(installer_builder, "VERSION", version)
     monkeypatch.setattr(installer_builder, "SOURCE_ROOT", tmp_path)
-    policy = {"version": version, "channel_baseline": baseline, "database_schema_changes": changes}
+    policy = {"update_mode": "automatic", "version": version, "channel_baseline": baseline, "database_schema_changes": changes}
     path = tmp_path / "update-policy.json"
     path.write_text(json.dumps(policy), encoding="utf-8")
     identity = installer_builder.ReleaseIdentity(PUBLIC_REPOSITORY)
@@ -151,9 +151,9 @@ def test_release_artifacts_are_deterministic_and_self_verifying(tmp_path):
     }
     assert manifest["update_policy"] == {
         "channel_baseline": "0.5.2",
-        "compose_or_schema_change_requires_migrator": True,
-        "current_release_requires_migrator": True,
-        "database_schema_changes": ["requests.title_en"],
+        "update_mode": "automatic",
+        "current_release_requires_migrator": False,
+        "database_schema_changes": ["requests.title_en", "penczreq_component"],
         "main_push_updates_production": False,
         "numbered_image_is_rollback_anchor": True,
         "stable_requires_approved_release": True,
@@ -505,7 +505,7 @@ def test_release_requires_approval_license_and_promotes_stable_last():
     promotion = text.index('imagetools create --prefer-index=false --tag "$CHANNEL_IMAGE"')
     assert immutable_push < text.index("gh release upload") < promotion
     assert 'if exists "$image"; then' in text
-    assert 'test "$stable" = "$expected"' in text
+    assert 'test "$stable" = "$repo:stable"' in text
     assert "--execute" not in text
     assert "midclt" not in text
 

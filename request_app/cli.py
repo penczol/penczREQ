@@ -5,6 +5,7 @@ import asyncio
 import getpass
 import sys
 
+from .migrations import writer_session
 from .config import load_settings
 from .database import Database, utc_now
 from .repository import Repository
@@ -31,7 +32,6 @@ def init_admin(username: str) -> int:
 
     settings = load_settings()
     db = Database(settings.database_path)
-    db.initialize()
     now = utc_now()
     with db.transaction() as conn:
         admin_exists = conn.execute(
@@ -75,19 +75,24 @@ def main() -> int:
         help="Osobna bramka dla jawnie zatwierdzonego środowiska production",
     )
     args = parser.parse_args()
-    if args.command == "init-admin":
-        return init_admin(args.username)
+    settings = load_settings()
     if args.command == "backfill-english-titles":
-        settings = load_settings()
         if settings.app_env == "production" and not args.allow_production_network_backfill:
             print(
                 "Odmowa: sieciowy backfill production wymaga osobnej jawnej bramki.",
                 file=sys.stderr,
             )
             return 2
+    with writer_session(settings):
+        return run_command(args)
+
+
+def run_command(args) -> int:
+    if args.command == "init-admin":
+        return init_admin(args.username)
+    if args.command == "backfill-english-titles":
+        settings = load_settings()
         db = Database(settings.database_path)
-        if args.apply:
-            db.initialize()
         repository = Repository(db)
         secure_config = SecureConfigStore(db, settings.config_encryption_key)
         client = TMDBClient(

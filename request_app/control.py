@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .migrations import coordinate, writer_session, writer_thread
 from . import __version__
 from .audit import SecurityAudit
 from .auth_protection import LoginProtection, client_scope
@@ -68,7 +69,7 @@ async def backup_maintenance_loop() -> None:
                 retention = int(secure_config.get_setting(
                     "backup_retention_days", str(settings.backup_retention_days)
                 ))
-                await asyncio.to_thread(
+                await writer_thread(settings,
                     create_backup,
                     db,
                     settings.control_database_path,
@@ -83,7 +84,14 @@ async def backup_maintenance_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    db.initialize()
+    coordinate(settings)
+    with writer_session(settings):
+        async with serving():
+            yield
+
+
+@asynccontextmanager
+async def serving():
     if db.quick_check() != "ok":
         raise RuntimeError("Baza aplikacji nie przeszła kontroli integralności.")
     secure_config.initialize(
@@ -92,7 +100,6 @@ async def lifespan(_: FastAPI):
         known_proxies=settings.public_trusted_proxies,
     )
     repo.enforce_roles(settings.public_admin_username, settings.public_admin_bootstrap_password)
-    control_store.initialize()
     created = control_store.bootstrap(
         settings.control_admin_username,
         settings.control_bootstrap_password,
@@ -203,7 +210,7 @@ def verify_csrf(request: Request, user: Any, form_token: str | None = None) -> N
 
 
 async def require_reauthentication(user: Any, password: str) -> None:
-    valid = await asyncio.to_thread(control_store.verify_current_password, user["id"], password)
+    valid = await writer_thread(settings, control_store.verify_current_password, user["id"], password)
     if not valid:
         raise ControlError("Hasło panelu Control jest nieprawidłowe.")
 
@@ -316,7 +323,7 @@ async def set_language(
     user = request.state.control_user
     if user:
         verify_csrf(request, user, csrf_token)
-        await asyncio.to_thread(control_store.set_language, user["id"], language)
+        await writer_thread(settings, control_store.set_language, user["id"], language)
     destination = next_path if next_path.startswith("/") and not next_path.startswith("//") else "/"
     response = RedirectResponse(destination, status_code=303)
     set_language_cookie(response, language)
@@ -350,9 +357,9 @@ async def login(
         control_store.record_failure(ip_key)
         return render_login_page(request, status_code=401, error=generic)
     async with auth_semaphore:
-        user = await asyncio.to_thread(control_store.authenticate, username, password, ip)
+        user = await writer_thread(settings, control_store.authenticate, username, password, ip)
     if not user:
-        retry = await asyncio.to_thread(control_store.record_failure, ip_key)
+        retry = await writer_thread(settings, control_store.record_failure, ip_key)
         audit.emit(
             "control_login_failure", severity="critical", username=username.strip().lower()[:64],
             ip_address=ip, details={"blocked": bool(retry), "retry_after": retry},
@@ -429,7 +436,7 @@ async def force_password(
             error=localize_message("Wprowadzone hasła nie są identyczne.", request.state.language),
         )
     try:
-        await asyncio.to_thread(
+        await writer_thread(settings,
             control_store.change_password, user["id"], current_password, new_password
         )
     except ControlError as exc:
@@ -524,8 +531,8 @@ async def api_overview(user=Depends(require_control_user)):
         "public_admin": public_admin,
         "tmdb_configured": secure_config.has_secret("tmdb_token"),
         "public_base_url": secure_config.get_setting("public_base_url", settings.app_base_url),
-        "integrity": await asyncio.to_thread(integrity_report, db, settings.control_database_path),
-        "backups": await asyncio.to_thread(list_backups, settings.backups_dir),
+        "integrity": await writer_thread(settings, integrity_report, db, settings.control_database_path),
+        "backups": await writer_thread(settings, list_backups, settings.backups_dir),
         "bootstrap_file_exists": control_store.bootstrap_file.exists(),
     }
 
@@ -539,7 +546,7 @@ async def api_users(user=Depends(require_control_user)):
 async def api_create_user(body: PublicUserCreateBody, request: Request, user=Depends(require_control_user)):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    created = await asyncio.to_thread(repo.create_user, body.username, body.temporary_password)
+    created = await writer_thread(settings, repo.create_user, body.username, body.temporary_password)
     audit.emit(
         "public_user_created", severity="warning", actor_type="control_admin",
         actor_id=user["id"], username=user["username"], ip_address=raw_client_ip(request),
@@ -561,7 +568,7 @@ async def api_user_active(
 ):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    await asyncio.to_thread(repo.set_user_active, user_id, body.active)
+    await writer_thread(settings, repo.set_user_active, user_id, body.active)
     audit.emit(
         "public_user_active_changed", severity="critical", actor_type="control_admin",
         actor_id=user["id"], username=user["username"], ip_address=raw_client_ip(request),
@@ -576,8 +583,8 @@ async def api_user_password(
 ):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    await asyncio.to_thread(repo.set_password, user_id, body.temporary_password, force_change=True)
-    revoked = await asyncio.to_thread(repo.revoke_user_sessions, user_id)
+    await writer_thread(settings, repo.set_password, user_id, body.temporary_password, force_change=True)
+    revoked = await writer_thread(settings, repo.revoke_user_sessions, user_id)
     audit.emit(
         "public_user_password_reset", severity="critical", actor_type="control_admin",
         actor_id=user["id"], username=user["username"], ip_address=raw_client_ip(request),
@@ -592,7 +599,7 @@ async def api_user_username(
 ):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    await asyncio.to_thread(repo.rename_user, user_id, body.username)
+    await writer_thread(settings, repo.rename_user, user_id, body.username)
     audit.emit(
         "public_user_renamed", severity="critical", actor_type="control_admin",
         actor_id=user["id"], username=user["username"], ip_address=raw_client_ip(request),
@@ -607,7 +614,7 @@ async def api_transfer_admin(
 ):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    await asyncio.to_thread(repo.transfer_admin_role, user_id)
+    await writer_thread(settings, repo.transfer_admin_role, user_id)
     audit.emit(
         "public_admin_transferred", severity="critical", actor_type="control_admin",
         actor_id=user["id"], username=user["username"], ip_address=raw_client_ip(request),
@@ -622,7 +629,7 @@ async def api_revoke_sessions(
 ):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    count = await asyncio.to_thread(repo.revoke_user_sessions, user_id)
+    count = await writer_thread(settings, repo.revoke_user_sessions, user_id)
     audit.emit(
         "public_sessions_revoked", severity="warning", actor_type="control_admin",
         actor_id=user["id"], username=user["username"], ip_address=raw_client_ip(request),
@@ -637,7 +644,7 @@ async def api_delete_user(
 ):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    result = await asyncio.to_thread(repo.delete_user, user_id)
+    result = await writer_thread(settings, repo.delete_user, user_id)
     audit.emit(
         "public_user_deleted", severity="critical", actor_type="control_admin",
         actor_id=user["id"], username=user["username"], ip_address=raw_client_ip(request),
@@ -648,10 +655,10 @@ async def api_delete_user(
 
 @app.get("/api/control/throttles")
 async def api_throttles(user=Depends(require_control_user)):
-    public_items = await asyncio.to_thread(login_protection.list_states)
+    public_items = await writer_thread(settings, login_protection.list_states)
     for item in public_items:
         item["source"] = "public"
-    control_items = await asyncio.to_thread(control_store.list_throttles)
+    control_items = await writer_thread(settings, control_store.list_throttles)
     items = public_items + control_items
     items.sort(key=lambda item: (bool(item.get("blocked_until")), item.get("updated_at") or ""), reverse=True)
     return {"items": items}
@@ -666,9 +673,9 @@ async def api_reset_throttle(
     if body.source == "control":
         if body.scope != "ip":
             raise ControlError("Limiter Control obsługuje wyłącznie adresy IP.")
-        removed = await asyncio.to_thread(control_store.reset_throttle, body.key)
+        removed = await writer_thread(settings, control_store.reset_throttle, body.key)
     else:
-        removed = await asyncio.to_thread(login_protection.reset, body.scope, body.key)
+        removed = await writer_thread(settings, login_protection.reset, body.scope, body.key)
     if not removed:
         raise ControlError("Wpis blokady już nie istnieje.")
     audit.emit(
@@ -744,7 +751,7 @@ async def api_backup(body: ReauthBody, request: Request, user=Depends(require_co
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
     retention = int(secure_config.get_setting("backup_retention_days", str(settings.backup_retention_days)))
-    created = await asyncio.to_thread(
+    created = await writer_thread(settings,
         create_backup, db, settings.control_database_path, settings.backups_dir,
         retention_days=retention,
     )
@@ -758,17 +765,17 @@ async def api_backup(body: ReauthBody, request: Request, user=Depends(require_co
 
 @app.get("/api/control/backups")
 async def api_backups(user=Depends(require_control_user)):
-    return {"items": await asyncio.to_thread(list_backups, settings.backups_dir)}
+    return {"items": await writer_thread(settings, list_backups, settings.backups_dir)}
 
 
 @app.get("/api/control/events")
 async def api_events(user=Depends(require_control_user)):
-    return {"items": await asyncio.to_thread(audit.recent, 300)}
+    return {"items": await writer_thread(settings, audit.recent, 300)}
 
 
 @app.get("/api/control/settings-history")
 async def api_settings_history(user=Depends(require_control_user)):
-    items = await asyncio.to_thread(secure_config.settings_history, 200)
+    items = await writer_thread(settings, secure_config.settings_history, 200)
     return {"items": localize_settings_history(items, user["language"])}
 
 
@@ -776,7 +783,7 @@ async def api_settings_history(user=Depends(require_control_user)):
 async def api_broadcast(body: BroadcastBody, request: Request, user=Depends(require_control_user)):
     verify_csrf(request, user)
     await require_reauthentication(user, body.current_password)
-    count = await asyncio.to_thread(
+    count = await writer_thread(settings,
         repo.broadcast_localized,
         0,
         title_en=body.title_en,
@@ -799,7 +806,7 @@ async def api_control_password(
     verify_csrf(request, user)
     if body.new_password != body.confirm_password:
         raise ControlError("Wprowadzone hasła nie są identyczne.")
-    await asyncio.to_thread(
+    await writer_thread(settings,
         control_store.change_password, user["id"], body.current_password, body.new_password
     )
     audit.emit(
@@ -817,7 +824,7 @@ async def api_control_username(
 ):
     verify_csrf(request, user)
     old_username = user["username"]
-    await asyncio.to_thread(
+    await writer_thread(settings,
         control_store.rename_user, user["id"], body.current_password, body.username
     )
     audit.emit(

@@ -1,5 +1,9 @@
 {
   "version": "0.5.2",
   "channel_baseline": "0.5.2",
-  "database_schema_changes": ["requests.title_en"]
+  "database_schema_changes": [
+    "requests.title_en",
+    "penczreq_component"
+  ],
+  "update_mode": "automatic"
 }

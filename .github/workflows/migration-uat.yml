@@ -1,0 +1,42 @@
+name: Startup migration UAT
+on:
+  push:
+    branches: [codex/truenas-update-uat]
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: startup-migration-uat
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.event.head_commit.message == 'Build migration UAT candidates' || github.event.head_commit.message == 'Advance migration UAT'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PHASE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/penczreq"
+          track="$repo:uat-startup-migration"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if [[ "$PHASE" == 'Build migration UAT candidates' ]]; then
+            mkdir fixture
+            cp -r request_app fixture/
+            printf 'FROM %s\nCOPY --chown=568:568 request_app /app/request_app\n' "$repo@sha256:f78476cc32014772abf41e4b85882b8846e7078c372529ee8550366939c1ca18" > fixture/Dockerfile
+            for patch in 3 4 5; do
+              version="0.5.$patch+uat"
+              printf '__version__ = "%s"\n' "$version" > fixture/request_app/__init__.py
+              docker build --label "org.opencontainers.image.version=$version" -t "$track-$patch" fixture
+              docker run --rm "$track-$patch" python -c 'from request_app.migrations import RELEASE; print(RELEASE)'
+              docker push "$track-$patch"
+            done
+            patch=3
+          else
+            patch=5
+          fi
+          docker buildx imagetools create --prefer-index=false -t "$track" "$track-$patch"
