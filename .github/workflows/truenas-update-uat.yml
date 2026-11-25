@@ -1,0 +1,52 @@
+name: TrueNAS isolated update exercise
+on:
+  push:
+    branches: [codex/truenas-update-uat]
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: truenas-isolated-update-uat
+  cancel-in-progress: false
+jobs:
+  exercise:
+    if: github.ref == 'refs/heads/codex/truenas-update-uat'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish only the selected UAT fixture
+        env:
+          PHASE: ${{ github.event.head_commit.message }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          case "$PHASE" in
+            'UAT baseline') stage=a ;;
+            'UAT compatible update') stage=b ;;
+            'UAT failed startup') stage=failure ;;
+            'UAT restore baseline') stage=restore ;;
+            *) exit 1 ;;
+          esac
+          repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/penczreq"
+          base="$repo@sha256:f78476cc32014772abf41e4b85882b8846e7078c372529ee8550366939c1ca18"
+          prefix="$repo:uat-truenas-20261125"
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if [[ "$stage" == a || "$stage" == restore ]]; then
+            docker buildx imagetools create --prefer-index=false -t "$prefix-a" "$base"
+            source="$base"
+          else
+            mkdir fixture
+            cd fixture
+            printf 'FROM %s\n' "$base" > Dockerfile
+            printf '__version__ = "0.5.2+uat.%s"\n' "$stage" > __init__.py
+            printf 'COPY __init__.py /app/request_app/__init__.py\n' >> Dockerfile
+            if [[ "$stage" == failure ]]; then
+              printf 'raise SystemExit("Deliberate UAT startup failure")\n' > server.py
+              printf 'COPY server.py /app/request_app/server.py\n' >> Dockerfile
+            fi
+            docker build --label "org.opencontainers.image.version=0.5.2+uat.$stage" -t "$prefix-$stage" .
+            docker run --rm "$prefix-$stage" python -c 'import request_app; print(request_app.__version__)'
+            docker push "$prefix-$stage"
+            source="$prefix-$stage"
+          fi
+          docker buildx imagetools create --prefer-index=false -t "$prefix" "$source"
+          docker buildx imagetools inspect "$prefix"
