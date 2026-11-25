@@ -102,6 +102,32 @@ def test_project_version_has_one_canonical_source():
     assert installer_builder.project_version() == __version__ == "0.5.2"
 
 
+@pytest.mark.parametrize("version,baseline,changes,channel", [
+    ("0.5.3", "0.5.2", [], "stable"),
+    ("0.6.0", "0.6.0", ["users.example"], "stable-0.6.0"),
+    ("0.6.1", "0.6.0", [], "stable-0.6.0"),
+    ("0.6.0", "0.5.2", ["users.example"], None),
+    ("0.5.3", "0.6.0", [], None),
+    ("0.5.3", "latest", [], None),
+])
+def test_packaged_update_channel(tmp_path, monkeypatch, version, baseline, changes, channel):
+    monkeypatch.setattr(installer_builder, "VERSION", version)
+    monkeypatch.setattr(installer_builder, "SOURCE_ROOT", tmp_path)
+    policy = {"version": version, "channel_baseline": baseline, "database_schema_changes": changes}
+    path = tmp_path / "update-policy.json"
+    path.write_text(json.dumps(policy), encoding="utf-8")
+    identity = installer_builder.ReleaseIdentity(PUBLIC_REPOSITORY)
+    if channel is None:
+        with pytest.raises(ValueError):
+            installer_builder.update_policy()
+    else:
+        assert identity.stable_image == f"ghcr.io/example-owner/penczreq:{channel}"
+        policy["version"] = "0.4.3"
+        path.write_text(json.dumps(policy), encoding="utf-8")
+        with pytest.raises(ValueError):
+            installer_builder.update_policy()
+
+
 def test_release_artifacts_are_deterministic_and_self_verifying(tmp_path):
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -124,6 +150,7 @@ def test_release_artifacts_are_deterministic_and_self_verifying(tmp_path):
         "moving": "ghcr.io/example-owner/penczreq:stable",
     }
     assert manifest["update_policy"] == {
+        "channel_baseline": "0.5.2",
         "compose_or_schema_change_requires_migrator": True,
         "current_release_requires_migrator": True,
         "database_schema_changes": ["requests.title_en"],
@@ -215,11 +242,18 @@ def load_packaged_installer(contents, monkeypatch):
 def test_public_installer_contains_resolved_locators_and_real_interactive_default(
     public_installer, monkeypatch
 ):
-    image = "ghcr.io/example-owner/penczreq:0.5.2"
+    image = "ghcr.io/example-owner/penczreq:stable"
     assert json.loads(public_installer["answers.example.json"])["image"] == image
     module = load_packaged_installer(public_installer, monkeypatch)
     monkeypatch.setattr(module, "_prompt", lambda _label, default: default)
     assert module.interactive_answers()["image"] == image
+    monkeypatch.setattr(module, "_prompt", lambda label, default: "upgrade" if label.startswith("Tryb") else default)
+    assert module.interactive_answers()["image"] == "ghcr.io/example-owner/penczreq:0.5.2"
+    for channel in ("stable", "stable-0.6.0"):
+        answers = module.interactive_answers()
+        answers["image"] = f"ghcr.io/example-owner/penczreq:{channel}"
+        with pytest.raises(module.InstallerError, match="Migrator"):
+            module.InstallConfig.from_mapping(answers)
     assert "https://github.com/example-owner/penczREQ/releases/download/v0.5.2" in (
         public_installer["INSTALL.md"]
     )
@@ -229,8 +263,8 @@ def test_public_installer_contains_resolved_locators_and_real_interactive_defaul
         assert "github.com/<owner>/" not in content
     original = (ROOT / "deploy/truenas/installer.py").read_text(encoding="utf-8")
     assert public_installer["installer.py"].replace(
-        image, "ghcr.io/<owner>/penczreq:0.5.2"
-    ) == original
+        image, "ghcr.io/<owner>/penczreq:stable"
+    ).replace("ghcr.io/example-owner/penczreq:0.5.2", "ghcr.io/<owner>/penczreq:0.5.2") == original
 
 
 def test_public_installer_still_rejects_manual_placeholder_before_mutations(
@@ -430,7 +464,8 @@ def test_ci_and_release_share_fail_closed_image_policy_and_preserve_evidence():
             assert "dist/trivy-image.json" in seal["run"]
             publish = document["jobs"]["publish"]
             assert publish["needs"] == "verify"
-            assert "dist/trivy-image.json" in publish["steps"][-1]["run"]
+            upload_assets = next(step for step in publish["steps"] if "gh release upload" in step.get("run", ""))
+            assert "dist/trivy-image.json" in upload_assets["run"]
 
 
 def test_release_requires_approval_license_and_promotes_stable_last():
@@ -467,9 +502,10 @@ def test_release_requires_approval_license_and_promotes_stable_last():
     assert not re.search(r"\b(PAT|PERSONAL_ACCESS_TOKEN)\b", text)
     assert all(re.search(r"@[0-9a-f]{40}(?:\s|$)", item) for item in all_uses(document))
     immutable_push = text.index('docker push "${image}"')
-    stable_tag = text.index('docker tag "${image}" "${stable}"')
-    stable_push = text.index('docker push "${stable}"')
-    assert immutable_push < stable_tag < stable_push
+    promotion = text.index('imagetools create --prefer-index=false --tag "$CHANNEL_IMAGE"')
+    assert immutable_push < text.index("gh release upload") < promotion
+    assert 'if exists "$image"; then' in text
+    assert 'test "$stable" = "$expected"' in text
     assert "--execute" not in text
     assert "midclt" not in text
 

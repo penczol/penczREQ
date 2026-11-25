@@ -8,7 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from build_installer import ROOT, VERSION, ReleaseIdentity, build as build_installer
+from build_installer import ROOT, VERSION, ReleaseIdentity, build as build_installer, update_policy
 
 
 RELEASE_NOTES = ROOT / "docs" / f"RELEASE-NOTES-{VERSION}.md"
@@ -24,6 +24,7 @@ def sha256(path: Path) -> str:
 
 def build(output_dir: Path, *, repository: str) -> tuple[Path, ...]:
     identity = ReleaseIdentity(repository)
+    policy = update_policy()
     output_dir.mkdir(parents=True, exist_ok=True)
     if not RELEASE_NOTES.is_file():
         raise FileNotFoundError(f"Missing release notes: {RELEASE_NOTES}")
@@ -49,8 +50,9 @@ def build(output_dir: Path, *, repository: str) -> tuple[Path, ...]:
                     "main_push_updates_production": False,
                     "numbered_image_is_rollback_anchor": True,
                     "compose_or_schema_change_requires_migrator": True,
-                    "current_release_requires_migrator": True,
-                    "database_schema_changes": ["requests.title_en"],
+                    "channel_baseline": policy["channel_baseline"],
+                    "current_release_requires_migrator": VERSION == policy["channel_baseline"],
+                    "database_schema_changes": policy["database_schema_changes"],
                 },
                 "artifacts": [
                     {

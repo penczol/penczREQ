@@ -125,8 +125,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build local image
         run: |
+          version="$(python3 -c 'from request_app import __version__; print(__version__)')"
+          echo "APP_VERSION=${version}" >> "${GITHUB_ENV}"
           docker build \
-            --build-arg APP_VERSION=0.5.2 \
+            --build-arg APP_VERSION="${version}" \
             --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --build-arg VCS_REF="${GITHUB_SHA}" \
             --build-arg VCS_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
@@ -143,7 +145,7 @@ jobs:
         with:
           image: penczreq:ci
           format: spdx-json
-          output-file: dist/penczreq-0.5.2.spdx.json
+          output-file: dist/penczreq-${{ env.APP_VERSION }}.spdx.json
           upload-artifact: false
       - name: Scan image with Trivy
         id: trivy_image

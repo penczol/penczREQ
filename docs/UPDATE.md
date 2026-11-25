@@ -4,7 +4,7 @@ This document defines the release-to-update contract for penczREQ 0.5.2.
 Production deployment is never automatic and requires explicit operator
 approval for the concrete operation.
 
-Fresh install is the primary route for new users because 0.5.2 is the planned
+Fresh install is the primary route for new users because 0.5.2 was the
 first public release. Upgrade `0.4.3 -> 0.5.2` is retained as the legacy
 migration path and as the reference versioned-migrator contract; 0.4.3, 0.5.0
 and 0.5.1 were not public releases.
@@ -13,8 +13,9 @@ and 0.5.1 were not public releases.
 
 The installer consumes the TrueNAS 25.10 API namespace and its technical
 preflight currently accepts the TrueNAS SCALE 25.10.x branch. The empirically
-validated appliance target is **TrueNAS SCALE 25.10.6**; fresh install, private
-upgrade, rollback, and the ZFS dataset contract passed for the 0.5.2 candidate.
+validated installer target is **TrueNAS SCALE 25.10.6**. Fresh install, private
+upgrade, rollback and the ZFS dataset contract passed for the 0.5.2 candidate.
+The Custom App image-update and data-recovery tests also passed on **25.10.7**.
 
 ## Image tags and promotion
 
@@ -31,8 +32,10 @@ and vulnerability gates, the release workflow may promote it to:
 ghcr.io/<owner>/penczreq:stable
 ```
 
-The numbered tag is the rollback anchor. `stable` is only a convenience pointer
-to the latest approved release; it is never updated by a push to `main`.
+The numbered tag is the rollback anchor. Record its registry digest as well. The `stable` channel
+starts at 0.5.2. All later images on that channel must work with the YAML,
+data and configuration of every earlier release on the same channel,
+including installations that skipped releases.
 Publishing is triggered only by a published GitHub Release, runs in the protected
 `release` environment and requires a selected repository `LICENSE`.
 
@@ -42,7 +45,29 @@ a release commit that is not contained in `origin/main`. It seals the tested ima
 and evidence into one short-lived workflow artifact. A dependent job in the
 protected `release` environment is the only job with `contents: write` and
 `packages: write`; it verifies that artifact before pushing the immutable image,
-then `stable`, and finally the fixed release-asset list.
+and uploading the fixed release-asset list. The last step promotes that
+numbered manifest by digest to the channel and reads its digest back.
+
+### Publishing a release
+
+1. Set the application and installer version, refresh release notes and review
+   `deploy/truenas/update-policy.json` for that version. Keep the channel
+   baseline only after testing an image-only update from the oldest supported
+   release and the preceding release. Check both services and rollback.
+2. For any incompatible change listed below, set the baseline to the new
+   version. List schema changes in the policy. Packaging assigns a separate
+   `stable-X.Y.Z` tag to the new baseline and its compatible successors.
+   The old channel stays on its last compatible release until its operator
+   backs up, runs the versioned migrator, verifies the result and enrolls in
+   the new channel. A version change without a policy review fails packaging.
+3. After reviewed changes reach main and CI passes, tag that commit `vX.Y.Z`
+   and publish a final GitHub Release for that tag. Review the verify job and
+   approve its protected **release** deployment. GitHub Actions rejects a
+   prerelease, a tag/version mismatch and a commit outside main history.
+4. Check the publish job, release assets and `image-digest.txt`. The numbered
+   and channel manifests must resolve to that digest. A different image ID
+   under an existing numbered tag stops publication. Resume a failed publish
+   from the sealed candidate while it is available.
 
 ## Simple image-only update
 
@@ -58,8 +83,47 @@ compatible:
 
 The operator still records the currently running digest, validates both
 databases and creates fresh paired backups before changing the image reference.
-The update must target an approved numbered tag or its verified digest, not an
-unreviewed moving tag.
+For routine updates use the reviewed channel from the release manifest in
+both services. Leave the registered YAML, env files and bind mounts in place.
+
+### Updating in TrueNAS Apps
+
+In Apps → Configuration → Settings, verify that image-update checks are
+enabled. When the installed Custom App shows **Update available**, select
+that app and **Update**. Avoid **Update All** when testing a single app.
+The registry polling interval can delay the badge. A numbered tag, a local
+RC name, a digest pin or `pull_policy: never` does not enroll an app in the
+moving channel. A one-time enrollment of an existing installation requires
+the version, storage and rollback checks below.
+
+After the job, verify both container healthchecks, the application version,
+image IDs and registry digest, and a known persisted record. The TrueNAS
+Custom App catalog version is separate from the version inside the image.
+If an update fails or is interrupted, inspect the app job, health and running
+digest of **both** services before retrying. Stop mixed versions or unhealthy
+services before resuming writes. Restore the saved image digest and YAML.
+Restore matching data and env files if the persistent state changed. The Apps
+rollback option does not restore mounted host-path data. See the
+[Apps UI](https://www.truenas.com/docs/scale/25.10/scaleuireference/apps/) and
+[image-pull API](https://api.truenas.com/v25.10/api_methods_app.pull_images.html).
+In 25.10.7 the Custom App branch of `app.upgrade` calls Compose pull and
+redeploy before the catalog snapshot path. Its image-update flag can clear
+after the pull even when redeployment fails. In a 25.10.7 failure test the outer
+`app.upgrade` job reported SUCCESS, the child `app.redeploy` job reported FAILED,
+Control exited and Public was unavailable. Check both jobs and both healthchecks.
+See the
+[upgrade implementation](https://github.com/truenas/middleware/blob/TS-25.10.7/src/middlewared/middlewared/plugins/apps/upgrade.py)
+and [pull implementation](https://github.com/truenas/middleware/blob/TS-25.10.7/src/middlewared/middlewared/plugins/apps/pull_images.py).
+
+An isolated two-service Custom App on 25.10.7 followed a moving GHCR test tag.
+After a targeted native registry check, Apps offered **Update**. Approving it
+recreated both services on the published digest. The saved request, Public and
+Control accounts, language settings, registered YAML and both env files survived.
+An independent legacy-schema fixture verified the startup migration and reversal
+from a stopped-state snapshot. After the failed-image test, restoring the matching
+dataset snapshot and pinning the previous manifest restored service. The operator
+re-enrolled the original YAML after the moving tag pointed to the verified image.
+The test did not measure the background registry polling interval.
 
 ## Versioned migrator
 
@@ -133,11 +197,13 @@ operation before the title-write transaction.
 Before a production update:
 
 1. identify the current app version, Compose and image digest;
+   for a migration, quiesce both services before backing up the live pair
+   and taking the snapshot so writes cannot fall between recovery points;
 2. run SQLite `quick_check` and `foreign_key_check` on both databases;
 3. create a transactionally consistent backup pair and verify it;
 4. create a recursive ZFS snapshot for the application root dataset;
-5. record snapshot, backup paths, previous image and previous Compose in
-   `ROLLBACK.json`;
+5. retain the previous registered YAML and image digest alongside the
+   installer's `ROLLBACK.json`, which records backup paths and snapshot;
 6. verify disk space and retain the previous numbered image;
 7. obtain explicit approval for the exact production action.
 
@@ -147,8 +213,12 @@ Stop after any failed health or integrity check. Rollback restores one coherent
 application state:
 
 1. stop the Custom App;
-2. restore the recorded recursive snapshot or the matching pair of databases;
-3. restore the previous Compose and numbered image/digest;
+2. restore the recorded snapshots for the application root and its child datasets
+   when the change affected schema, configuration, keys or other persistent files.
+   A matching SQLite pair alone suffices only if databases were the only state
+   that changed and the matching configuration and keys are available;
+3. restore the previous registered Compose and pin the previous manifest digest.
+   For an imported RC, retain its Docker archive, checksum, local tag and image ID;
 4. start Public and Control;
 5. run database checks, authentication, list rendering, TMDB and Web Push smoke
    tests.
@@ -184,9 +254,9 @@ rollback.
 The following still require empirical execution or an explicit controlled
 release/production step:
 
-- public GitHub and GHCR publication;
-- `--execute`, production snapshots and production migration;
-- empirical Custom App digest/promotion/rollback behavior.
+- approval and verification of each new public GitHub/GHCR release;
+- production enrollment, snapshots and migration for the specific installation;
+- compatibility and recovery for each new release candidate.
 
 The completed pre-publication TrueNAS validation followed this order: isolated
 fresh side-by-side 0.5.2 install, private `0.5.0/0.5.1 -> 0.5.2` upgrade UAT,

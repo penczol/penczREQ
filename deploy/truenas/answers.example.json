@@ -1,7 +1,7 @@
 {
   "mode": "fresh",
   "app_name": "penczreq",
-  "image": "ghcr.io/<owner>/penczreq:0.5.2",
+  "image": "ghcr.io/<owner>/penczreq:stable",
   "root_dataset": "POOL/apps/penczreq",
   "nas_ip": "192.0.2.10",
   "public_port": 18000,

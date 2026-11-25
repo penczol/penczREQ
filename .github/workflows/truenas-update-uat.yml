@@ -10,7 +10,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   exercise:
-    if: github.ref == 'refs/heads/codex/truenas-update-uat'
+    if: >-
+      github.ref == 'refs/heads/codex/truenas-update-uat' &&
+      contains(fromJSON('["UAT baseline","UAT compatible update","UAT failed startup","UAT restore compatible"]'), github.event.head_commit.message)
     runs-on: ubuntu-latest
     steps:
       - name: Publish only the selected UAT fixture

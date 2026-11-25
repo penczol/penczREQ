@@ -1,4 +1,4 @@
-# Instalacja penczREQ 0.5.2 — docelowy TrueNAS SCALE 25.10.6
+# Instalacja penczREQ 0.5.2 na TrueNAS SCALE
 
 Ten dokument opisuje przygotowany instalator wydania `0.5.2`. Przykładowy
 właściciel obrazu `<owner>` pozostaje placeholderem do czasu skonfigurowania
@@ -7,7 +7,7 @@ operatora na konkretną operację, świeżych kopii, snapshotu i zaakceptowanego
 planu rollbacku.
 
 Fresh install jest podstawową ścieżką dla nowych użytkowników, ponieważ 0.5.2
-jest planowanym pierwszym publicznym wydaniem. Upgrade `0.4.3 -> 0.5.2` jest
+jest pierwszym publicznym wydaniem. Upgrade `0.4.3 -> 0.5.2` jest
 zachowaną ścieżką migracji istniejącej instalacji legacy.
 
 Instalator obsługuje:
@@ -109,15 +109,17 @@ sudo docker load -i penczreq-0.5.2-docker-amd64.tar
 sudo docker image inspect ghcr.io/<owner>/penczreq:0.5.2
 ```
 
+W `answers.local.json` ustaw pole `image` na dokładny tag odczytany po imporcie.
+Przykładowy plik odpowiedzi dla instalacji sieciowej wskazuje ruchomy kanał.
+
 ```sh
 ./install.sh --dry-run --local-image --answers ./answers.local.json
 sudo ./install.sh --execute --local-image --answers ./answers.local.json
 ```
 
 Bez jawnej opcji `--local-image` generator zachowuje dotychczasową semantykę:
-nie dodaje pola `pull_policy`. Docelowa polityka pobierania dla przyszłego
-GHCR/version/stable workflow wymaga odrębnej walidacji i nie jest definiowana
-przez ten tryb UAT.
+nie dodaje pola `pull_policy`. W instalacji z rejestru pozwala to TrueNAS
+pobrać obraz wskazany przez zarejestrowany YAML podczas aktualizacji.
 
 ## Tryby dostępu
 
@@ -215,7 +217,10 @@ odpowiedzi.
 
 ## Upgrade istniejącej instalacji legacy 0.4.3 → 0.5.2
 
-W `answers.local.json` ustaw `"mode": "upgrade"`. Instalator wymaga istniejącej
+W `answers.local.json` ustaw `"mode": "upgrade"` i przypnij `image` do
+docelowego wydania, np. `ghcr.io/<owner>/penczreq:0.5.2`, lub do jego
+zweryfikowanego digestu. Po zatwierdzeniu okna serwisowego zatrzymaj obie
+usługi przed wykonaniem kopii i snapshotu. Instalator wymaga istniejącej
 aplikacji, obu env i obu baz. Nie regeneruje `SESSION_SECRET`,
 `CONTROL_SESSION_SECRET` ani `CONFIG_ENCRYPTION_KEY`; odmawia działania, gdy
 klucze są brakujące lub klucze szyfrowania Public/Control są różne.
@@ -251,15 +256,40 @@ Samo wskazanie nowszego obrazu jest dozwolone wyłącznie wtedy, gdy zgodne
 pozostają: Compose i entrypointy, porty, mounty i uprawnienia, wymagane zmienne
 oraz sekrety, schemat obu baz i kontrakt kopii/rollbacku. Także wtedy operator
 zapisuje aktualny digest, wykonuje kontrole obu baz i tworzy świeżą parę kopii.
-Aktualizacja powinna wskazywać zatwierdzony tag numerowany lub jego digest, a nie
-niezweryfikowany tag ruchomy.
+W nowej instalacji ze śledzeniem aktualizacji oba serwisy wskazują
+`ghcr.io/<owner>/penczreq:stable` dla linii zgodnej z 0.5.2.
+Użyj wygenerowanego YAML i istniejących na NAS plików env oraz host paths.
+W tym trybie pomiń `--local-image`. W Apps → Configuration → Settings sprawdź
+wykrywanie aktualizacji obrazów. Po pojawieniu się „Update available” wybierz
+penczREQ i Update. Przy zwykłej aktualizacji YAML pozostaje taki sam. Po
+zakończeniu porównaj wersję i digest z wydaniem, sprawdź oba healthchecki,
+ustawienia i zapisany rekord użytkownika. Jeśli obraz jest aktualny w GHCR,
+a aktualizacji nie widać, sprawdź dokładne tagi obu usług, dostęp NAS do
+rejestru i cykl sprawdzania obrazów.
+
+Na TrueNAS SCALE 25.10.7 odseparowana Custom App wykryła zmianę digestu
+w GHCR. Zatwierdzenie Update w panelu odtworzyło Public i Control z nowego
+obrazu. Zachowały się obie bazy, konta, ustawienia języka, zgłoszenie,
+zarejestrowany YAML i oba env. W osobnej próbie wadliwego obrazu nadrzędny
+job `app.upgrade` miał status SUCCESS, a `app.redeploy` zakończył się FAILED.
+Control zakończył pracę, Public był niedostępny, a znacznik aktualizacji zniknął.
+W takim przypadku sprawdź job potomny i oba healthchecki. W UAT przywrócenie
+snapshotu i przypięcie poprzedniego digestu przywróciło działanie aplikacji.
+
+Przejście z lokalnego RC wymaga jednorazowego porównania wersji, schematu
+i zarejestrowanego YAML. Zabezpiecz obie bazy, snapshot rekurencyjny,
+poprzedni obraz i konfigurację. Dopiero po zatwierdzeniu zmień odwołanie obu
+serwisów na kanał i usuń `pull_policy: never`, zachowując te same montowania
+i pliki env. Jeśli potrzebna jest migracja, wykonaj ją najpierw instalatorem
+z numerowanym obrazem. Panel Apps nie uruchamia naszego instalatora.
+Nie przywraca też host paths przy rollbacku aplikacji.
 
 Zmiana Compose, portów, datasetów, mountów, sekretów, schematu, kolejności
 migracji, trusted proxy albo metadanych Custom App wymaga wersjonowanego
 migratora. Dry-run migratora musi zakończyć się `mutations_performed: false`, nie
 może generować prawdziwych sekretów ani wywoływać metod mutujących TrueNAS.
 
-Schemat planowanego pierwszego publicznego wydania 0.5.2 zawiera nullable
+Schemat pierwszego publicznego wydania 0.5.2 zawiera nullable
 `requests.title_en`. Upgrade `0.4.3 -> 0.5.2` nie jest prostą aktualizacją image-only.
 Oficjalny tryb
 `upgrade` tworzy najpierw sprawdzoną parę kopii i snapshot rollbacku, następnie
@@ -352,9 +382,11 @@ Zatrzymaj dalsze działania i zachowaj komunikat błędu. Kontrolowany rollback
 produkcyjny obejmuje:
 
 1. zatrzymanie Custom App;
-2. rollback rekursywnych snapshotów zapisanych w `ROLLBACK.json` albo
-   przywrócenie pary baz z tego samego backupu;
-3. wskazanie poprzedniego numerowanego obrazu i poprzedniego Compose;
+2. przywrócenie snapshotów głównego datasetu i jego dzieci z `ROLLBACK.json`.
+   Sama para kopii SQLite wystarcza tylko wtedy, gdy zmiany dotyczyły wyłącznie
+   baz i dostępne są odpowiadające im konfiguracja oraz klucze;
+3. przywrócenie poprzedniego zarejestrowanego Compose i przypięcie dawnego
+   digestu. Dla lokalnego RC zachowaj archiwum Docker, jego sumę, tag i ID obrazu;
 4. uruchomienie obu usług;
 5. `quick_check`, foreign keys, logowanie Public/Control, dane i Web Push.
 
@@ -368,8 +400,9 @@ Installer używa lokalnego klienta middleware `midclt` i jobów `app.create`,
 `app.update` oraz warunkowo `app.start`. Odpowiada to namespace'owi wersjonowanego
 JSON-RPC API TrueNAS 25.10 dla Custom Apps z
 `custom_compose_config_string`. Numer API nie jest deklaracją empirycznej
-certyfikacji całej gałęzi 25.10.x; zweryfikowanym targetem jest TrueNAS SCALE
-25.10.6. Compose zawiera `x-portals`, które TrueNAS wykorzystuje do
+certyfikacji całej gałęzi 25.10.x. Instalator sprawdzono na 25.10.6,
+a aktualizację obrazów z panelu i odzyskiwanie danych również na 25.10.7.
+Compose zawiera `x-portals`, które TrueNAS wykorzystuje do
 pokazania klikalnych linków Public i Control.
 
 - API 25.10: <https://api.truenas.com/v25.10/api_methods_app.create.html>

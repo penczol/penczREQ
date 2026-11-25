@@ -111,7 +111,7 @@ deploy/truenas/install.sh \
 
 Review the generated, redacted preview before any `--execute` run. The
 `--local-image` option is for an image already present in the TrueNAS image
-store; normal release deployments use a versioned GHCR image. Never put TMDB,
+store; normal TrueNAS installations can follow a compatible GHCR channel. Never put TMDB,
 session, encryption, or bootstrap secrets in the answers file or in Git.
 
 ### Local container quick start
@@ -218,7 +218,9 @@ and a recursive ZFS snapshot, records rollback metadata, and preserves existing
 secrets. An image-only update is appropriate only while Compose, ports, mounts,
 secrets, proxy behavior, and database contracts remain compatible.
 
-Read the [update and rollback model](docs/UPDATE.md) before upgrading. Keep the
+For compatible releases, select the installed custom app in TrueNAS Apps and
+use **Update** when a new channel image is detected. Both services keep the
+same YAML, data mounts and env files. Read the [update and rollback model](docs/UPDATE.md) before upgrading. Keep the
 previous numbered image as the rollback anchor; do not treat the moving
 `:stable` tag as one.
 

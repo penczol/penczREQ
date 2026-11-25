@@ -177,7 +177,9 @@ A simple image-only update is eligible only when Compose, ports, mounts, secrets
 and database contracts remain compatible. A change to any of those surfaces
 requires the versioned migrator, both database checks, a consistent backup pair,
 a ZFS snapshot and a recorded rollback plan. The numbered image is the rollback
-anchor; `:stable` points to the most recently approved release. See
+anchor; `:stable` tracks approved releases compatible with the 0.5.2 baseline.
+Select the app and **Update** in TrueNAS Apps for compatible channel images.
+Changing to an incompatible line requires the versioned migrator. See
 [`UPDATE.md`](UPDATE.md).
 
 ## Tests and diagnostics

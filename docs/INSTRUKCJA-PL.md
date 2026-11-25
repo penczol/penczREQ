@@ -176,7 +176,9 @@ Prosta aktualizacja obrazu jest dopuszczalna tylko bez zmian Compose, portów,
 mountów, sekretów i kontraktu baz. Zmiana któregokolwiek z tych elementów wymaga
 wersjonowanego migratora, kontroli obu baz, ich spójnej kopii, snapshotu ZFS i
 zapisanego planu rollbacku. Numerowany tag obrazu jest kotwicą rollbacku;
-`:stable` wskazuje ostatnie zatwierdzone wydanie. Szczegóły opisuje
+`:stable` wskazuje zatwierdzone wydanie zgodne z linią 0.5.2. Zarejestrowana
+aplikacja śledząca ten tag może otrzymywać zgodne aktualizacje przez Apps → Update.
+Przejście między niezgodnymi liniami wymaga migratora. Szczegóły opisuje
 [`UPDATE.md`](UPDATE.md).
 
 ## Testy i diagnostyka

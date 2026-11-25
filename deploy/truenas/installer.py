@@ -135,6 +135,9 @@ class InstallConfig:
             raise InstallerError("Podaj pełną nazwę wersjonowanego obrazu OCI.")
         if image.endswith(":latest") or ":" not in image.rsplit("/", 1)[-1]:
             raise InstallerError("Obraz musi używać jawnego taga wersji albo stable, nie latest.")
+        image_tag = image.rsplit(":", 1)[-1]
+        if mode == "upgrade" and (image_tag == "stable" or image_tag.startswith("stable-")):
+            raise InstallerError("Migrator wymaga obrazu docelowego wydania przypiętego wersją lub digestem.")
 
         root_dataset = str(data.get("root_dataset", "")).strip().strip("/")
         if not DATASET_PATTERN.fullmatch(root_dataset) or ".." in root_dataset.split("/"):
@@ -892,7 +895,10 @@ def interactive_answers() -> dict[str, Any]:
     return {
         "mode": mode,
         "app_name": _prompt("Nazwa aplikacji TrueNAS", "penczreq"),
-        "image": _prompt("Wersjonowany obraz OCI", "ghcr.io/<owner>/penczreq:0.5.2"),
+        "image": _prompt(
+            "Obraz OCI (kanał aktualizacji lub wersja)",
+            "ghcr.io/<owner>/penczreq:stable" if mode == "fresh" else "ghcr.io/<owner>/penczreq:0.5.2",
+        ),
         "root_dataset": _prompt("Dataset główny", "POOL/apps/penczreq"),
         "nas_ip": nas_ip,
         "public_port": public_port,

@@ -7,6 +7,7 @@ import argparse
 import gzip
 import hashlib
 import io
+import json
 import re
 import tarfile
 from dataclasses import dataclass
@@ -33,6 +34,21 @@ def project_version() -> str:
 
 
 VERSION = project_version()
+
+
+def update_policy() -> dict:
+    policy = json.loads((SOURCE_ROOT / "update-policy.json").read_text(encoding="utf-8"))
+    baseline = policy["channel_baseline"]
+    if policy["version"] != VERSION or not re.fullmatch(r"(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){2}", baseline):
+        raise ValueError("Review the TrueNAS update policy for this release")
+    if tuple(map(int, baseline.split("."))) > tuple(map(int, VERSION.split("."))):
+        raise ValueError("Update channel baseline exceeds the release version")
+    changes = policy["database_schema_changes"]
+    if not isinstance(changes, list) or not all(isinstance(item, str) and item for item in changes):
+        raise ValueError("Invalid database schema change list")
+    if changes and baseline != VERSION:
+        raise ValueError("A database migration must start a new update channel")
+    return policy
 
 
 @dataclass(frozen=True)
@@ -68,7 +84,9 @@ class ReleaseIdentity:
     @property
     def stable_image(self) -> str:
         owner = self.github_repository.split("/")[0].lower()
-        return f"ghcr.io/{owner}/penczreq:stable"
+        baseline = update_policy()["channel_baseline"]
+        tag = "stable" if baseline == "0.5.2" else f"stable-{baseline}"
+        return f"ghcr.io/{owner}/penczreq:{tag}"
 
 
 def render_public_locators(name: str, payload: bytes, identity: ReleaseIdentity) -> bytes:
