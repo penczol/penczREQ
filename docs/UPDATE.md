@@ -60,8 +60,11 @@ numbered manifest by digest to the channel and reads its digest back.
    The old channel stays on its last compatible release until its operator
    backs up, runs the versioned migrator, verifies the result and enrolls in
    the new channel. A version change without a policy review fails packaging.
-3. After reviewed changes reach main and CI passes, tag that commit `vX.Y.Z`
-   and publish a final GitHub Release for that tag. Review the verify job and
+3. After reviewed changes reach main and CI passes, check Settings →
+   Environments → release → Deployment branches and tags. When the environment
+   uses individual tag rules, add the exact approved tag `vX.Y.Z` and retain
+   its required reviewers. Tag the approved commit and publish a final GitHub
+   Release for that tag. Review the verify job and
    approve its protected **release** deployment. GitHub Actions rejects a
    prerelease, a tag/version mismatch and a commit outside main history.
 4. Check the publish job, release assets and `image-digest.txt`. The numbered

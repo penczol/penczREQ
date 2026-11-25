@@ -311,7 +311,10 @@ Przygotowany workflow wydania ma tworzyć paczkę instalatora, sumy SHA-256,
 manifest wydania i release notes, a po rzeczywistym zbudowaniu obrazu także SPDX
 SBOM oraz raporty skanów. Obraz `:<wersja>` jest kotwicą rollbacku; `:stable`
 może zostać przesunięty dopiero po zaakceptowanym wydaniu. Push do `main` nie
-publikuje obrazu i nie aktualizuje NAS-a. Na Windows 11 z Docker Desktop
+publikuje obrazu i nie aktualizuje NAS-a. Przed utworzeniem kolejnego wydania
+sprawdź reguły tagów w Settings → Environments → release. Przy liście
+pojedynczych tagów dodaj dokładny tag zatwierdzonego wydania i zachowaj
+wymagany przegląd wdrożenia. Na Windows 11 z Docker Desktop
 wykonano lokalnie realne buildy Linux/amd64, niezależny rebuild bez cache, SPDX
 image SBOM, Trivy image scan i utwardzony runtime smoke Public/Control. Osobna
 walidacja TrueNAS SCALE 25.10.6 potwierdziła fresh install, upgrade, rollback i
