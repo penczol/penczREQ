@@ -23,14 +23,16 @@ jobs:
             'UAT baseline') stage=a ;;
             'UAT compatible update') stage=b ;;
             'UAT failed startup') stage=failure ;;
-            'UAT restore baseline') stage=restore ;;
+            'UAT restore compatible') stage=restore ;;
             *) exit 1 ;;
           esac
           repo="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/penczreq"
           base="$repo@sha256:f78476cc32014772abf41e4b85882b8846e7078c372529ee8550366939c1ca18"
           prefix="$repo:uat-truenas-20261125"
           printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          if [[ "$stage" == a || "$stage" == restore ]]; then
+          if [[ "$stage" == restore ]]; then
+            source="$repo@sha256:2d2e7993aa57a154b3c33dbdf8c34c262a8796eacffd5356e7bf1e15db9e567c"
+          elif [[ "$stage" == a ]]; then
             docker buildx imagetools create --prefer-index=false -t "$prefix-a" "$base"
             source="$base"
           else
