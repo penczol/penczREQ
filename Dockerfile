@@ -20,6 +20,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data \
     TZ=Europe/Warsaw
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade \
+        apt gzip libapt-pkg7.0 libpcre2-8-0 libsqlite3-0 libssl3t64 \
+        libzstd1 openssl openssl-provider-legacy perl-base zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system --gid 568 penczreq \
     && useradd --system --uid 568 --gid 568 --home-dir /nonexistent \
        --shell /usr/sbin/nologin penczreq

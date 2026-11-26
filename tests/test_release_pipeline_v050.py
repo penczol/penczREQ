@@ -155,6 +155,12 @@ def test_uat_publishes_only_on_an_explicit_request():
     assert "checkout@" not in str(publish) and "stable" not in text
     assert 'docker push "$ref"' in text and '-t "$repo:uat"' in text
     assert "tools/container-smoke.sh" in text and "publication_gate.py" in text
+    steps = document["jobs"]["verify"]["steps"]
+    scan = next(i for i, step in enumerate(steps) if step.get("with", {}).get("image-ref") == "penczreq:uat-candidate")
+    policy = next(i for i, step in enumerate(steps) if "enforce_image_vulnerability_policy.py" in step.get("run", ""))
+    transfer = next(i for i, step in enumerate(steps) if "upload-artifact@" in step.get("uses", ""))
+    assert scan < policy < transfer
+    assert not steps[policy].get("continue-on-error")
 
 
 def test_release_artifacts_are_deterministic_and_self_verifying(tmp_path):

@@ -42,6 +42,17 @@ jobs:
           bash tools/container-smoke.sh penczreq:uat-candidate
           docker save -o candidate.tar penczreq:uat-candidate
           sha256sum candidate.tar > candidate.sha256
+      - name: Scan the exact UAT candidate
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: penczreq:uat-candidate
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          format: json
+          output: trivy-uat.json
+          exit-code: "0"
+      - name: Enforce the reviewed image policy before transfer
+        run: python tools/enforce_image_vulnerability_policy.py --report trivy-uat.json --baseline security/trivy-image-baseline.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: tested-uat
