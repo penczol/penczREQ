@@ -292,6 +292,43 @@ portów, kont i plików env. W Public ustaw WEB_PUSH_DELIVERY=disabled. Oba
 kanały używają Apps → Update. Osobny migrator obsługuje zmiany wymagające
 interwencji operatora, np. nowego montowania lub niedostępnego klucza.
 
+### Uprawnienia stałej instancji UAT pod udziałem SMB
+
+1. W **Datasets** sprawdź punkt montowania rodzica, typ ACL, ACL Mode oraz
+   właściciela. W **Shares → Windows (SMB) Shares** sprawdź także udziały
+   obejmujące rodzica lub katalog poniżej planowanego UAT. Dostęp klienta
+   zależy zarówno od ACL udziału, jak i praw do przejścia przez katalogi.
+   Właściwości ZFS i źródło ich wartości możesz odczytać poleceniem
+   `zfs get -o name,property,value,source acltype,aclmode,aclinherit DATASET`.
+2. Przed zapisaniem sekretów utwórz prywatny dataset UAT. Pod udziałem
+   NFSv4 wybierz NFSv4 również dla każdego osobno montowanego dziecka.
+   Sprawdź wartości po utworzeniu. Dla rodzica używającego
+   `nfsv4/passthrough/passthrough` taki sam zestaw obsługuje zmianę trybu
+   prywatnych plików przez aplikację. Sam wybór presetu ani zgodność
+   właściwości ZFS nie określają, kto ma dostęp do plików. Pozostaw tworzenie
+   dodatkowego udziału SMB wyłączone.
+3. Skontroluj wpisy ACL na nowym korzeniu i flagi dziedziczenia. Daj
+   administratorowi dostęp do korzenia (np. `0700`) i jego plików env
+   (`0600`). Zamontuj osobno katalogi danych Public, Control i kopii.
+   UID/GID kontenera muszą mieć wymagany dostęp wewnątrz tych montowań.
+   Sprawdź też prywatność klucza VAPID i katalogów kopii przedmigracyjnych.
+   Rekurencyjne skopiowanie ACL udziału może przyznać grupie aplikacji
+   dostęp do sekretów. Instalator 0.5.2 tworzy własny układ datasetów
+   i ustawia właściciela ich korzeni. Przy prywatnym korzeniu zarządzanym
+   przez operatora przygotuj host paths oddzielnie.
+4. Przed naprawą istniejącego UAT zatrzymaj jego procesy, zapisz właściwości
+   ZFS wraz ze źródłami, granice montowań, UID/GID, tryby oraz rozszerzone
+   i domyślne ACL. Wykonaj snapshot UAT. Zmiana typu nie tłumaczy nazwanych
+   wpisów POSIX na wpisy NFSv4. Jeżeli takie wpisy istnieją, przygotuj
+   odwzorowanie praw przed zmianą. Przy prostych prawach porównaj wszystkie
+   ścieżki po zmianie, zanim ponownie włączysz aplikację. Odtworzenie
+   właściwości ZFS wymaga osobnego kroku przy ewentualnym rollbacku.
+5. Sprawdź listowanie przez zwykłą sesję SMB i próbę utworzenia, zmiany nazwy
+   oraz usunięcia pliku tymczasowego w każdym zapisywalnym montowaniu jako
+   użytkownik usługi. Sprawdź źródło alertu SMBPath i aktywne alerty.
+   Po pierwszym **Apps → Update** skontroluj oba zadania TrueNAS, wewnętrzne
+   healthchecki, dziennik Control, integralność obu baz i sumy pary kopii.
+
 Schemat pierwszego publicznego wydania 0.5.2 zawiera nullable
 `requests.title_en`. Upgrade `0.4.3 -> 0.5.2` nie jest prostą aktualizacją image-only.
 Oficjalny tryb

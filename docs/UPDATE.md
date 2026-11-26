@@ -79,6 +79,12 @@ Give UAT independent datasets, env, secrets, ports and synthetic accounts.
 Set `WEB_PUSH_DELIVERY=disabled` in its Public service. Development stays on
 the workstation. UAT runs the published image and its own persistent test data.
 
+Before enrolling a persistent UAT under an SMB share, verify the share path,
+the parent and child dataset ACL types, and the effective permissions on each
+bind mount. Exercise the service identity and an ordinary SMB session. Record
+the result with the UAT installation so subsequent image updates can use the
+same storage. See the [UAT storage procedure](../deploy/truenas/INSTALL.md#uprawnienia-stałej-instancji-uat-pod-udziałem-smb).
+
 Codex deliberately runs **Publish tested UAT image** on an allowed reviewed ref.
 Before the workflow reaches the default branch, an empty commit named exactly
 `Publish tested UAT image` on `codex/truenas-update-uat` triggers the same job.
