@@ -284,7 +284,7 @@ def test_truenas_template_preserves_security_boundaries():
 
 def test_image_runs_as_unprivileged_user_with_pinned_runtime():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-    requirements = (ROOT / "requirements.lock").read_text(encoding="utf-8")
+    requirements = (ROOT / "requirements.txt").read_text(encoding="utf-8")
     dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
 
     assert (
@@ -294,7 +294,7 @@ def test_image_runs_as_unprivileged_user_with_pinned_runtime():
     assert "USER 568:568" in dockerfile
     assert "HEALTHCHECK " in dockerfile
     assert "VOLUME " not in dockerfile
-    assert "pip install --no-cache-dir --requirement requirements.lock" in dockerfile
+    assert "pip install --no-cache-dir --requirement requirements.txt" in dockerfile
     assert "site-packages/pip" in dockerfile
     assert "release" in dockerignore.splitlines()
     assert "fastapi==0.139.2" in requirements

@@ -25,8 +25,8 @@ RUN groupadd --system --gid 568 penczreq \
        --shell /usr/sbin/nologin penczreq
 
 WORKDIR /app
-COPY requirements.lock ./
-RUN python -m pip install --no-cache-dir --requirement requirements.lock \
+COPY requirements.txt ./
+RUN python -m pip install --no-cache-dir --requirement requirements.txt \
     && rm -rf /usr/local/lib/python3.12/site-packages/pip \
               /usr/local/lib/python3.12/site-packages/pip-*.dist-info \
               /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
