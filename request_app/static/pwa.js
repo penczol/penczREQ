@@ -21,7 +21,54 @@
   let deferredInstallPrompt = null;
   let workerRegistration = null;
   let workerRegistrationPromise = null;
+  const pageRelease = document.documentElement.dataset.release;
+  const deferredReleaseKey = "penczreq.deferredRelease";
+  const appliedReleaseKey = "penczreq.appliedRelease";
+  let availableRelease = null;
+  let deferredRelease = null;
+  let releaseCheck = null;
   let updateReloadStarted = false;
+
+  function readDeferredRelease() {
+    try { return localStorage.getItem(deferredReleaseKey); }
+    catch { return deferredRelease; }
+  }
+
+  function remember(key, release) {
+    try { localStorage.setItem(key, release); } catch { /* Storage is optional. */ }
+  }
+
+  function renderUpdate() {
+    if (updateBanner) updateBanner.hidden = !availableRelease || availableRelease === readDeferredRelease();
+  }
+
+  function reloadOnce() {
+    if (updateReloadStarted) return;
+    updateReloadStarted = true;
+    window.location.reload();
+  }
+
+  function checkRelease() {
+    if (!pageRelease || !updateBanner) return Promise.resolve();
+    if (!releaseCheck) {
+      releaseCheck = fetch("/api/release", { cache: "no-store", credentials: "omit" })
+        .then(async (response) => {
+          if (!response.ok) return;
+          const { release } = await response.json();
+          if (typeof release !== "string" || !release) return;
+          availableRelease = release === pageRelease ? null : release;
+          renderUpdate();
+          // The worker handles push only. A fresh page can finish activation
+          // even when another tab still holds the previous worker.
+          if (!availableRelease && workerRegistration?.waiting) {
+            workerRegistration.waiting.postMessage({ type: "ACTIVATE_UPDATE" });
+          }
+        })
+        .catch(() => { /* Offline or redeploying: retain the last known state. */ })
+        .finally(() => { releaseCheck = null; });
+    }
+    return releaseCheck;
+  }
 
   function isStandalone() {
     return window.matchMedia("(display-mode: standalone)").matches
@@ -46,19 +93,12 @@
     installButton.hidden = isStandalone() || !window.isSecureContext;
   }
 
-  function showWorkerUpdate() {
-    if (updateBanner) updateBanner.hidden = false;
-  }
-
   function watchWorkerRegistration(registration) {
-    if (registration.waiting && navigator.serviceWorker.controller) showWorkerUpdate();
+    if (registration.waiting) checkRelease();
     registration.addEventListener("updatefound", () => {
       const candidate = registration.installing;
-      if (!candidate) return;
-      candidate.addEventListener("statechange", () => {
-        if (candidate.state === "installed" && navigator.serviceWorker.controller) {
-          showWorkerUpdate();
-        }
+      candidate?.addEventListener("statechange", () => {
+        if (candidate.state === "installed") checkRelease();
       });
     });
     const checkForUpdate = () => registration.update().catch((error) => {
@@ -154,33 +194,36 @@
     installButton.hidden = choice.outcome === "accepted";
   });
 
-  applyUpdateButton?.addEventListener("click", async () => {
+  applyUpdateButton?.addEventListener("click", () => {
+    if (!availableRelease) return;
     applyUpdateButton.disabled = true;
-    try {
-      const registration = await registerWorker();
-      if (!registration?.waiting) {
-        window.location.reload();
-        return;
-      }
-      registration.waiting.postMessage({ type: "ACTIVATE_UPDATE" });
-    } catch (error) {
-      console.error("penczREQ service worker update failed.", error);
-      toast?.(tr("Nie udało się uruchomić obsługi aplikacji na tym urządzeniu."), "error");
-      applyUpdateButton.disabled = false;
-    }
+    remember(appliedReleaseKey, availableRelease);
+    reloadOnce();
   });
 
   dismissUpdateButton?.addEventListener("click", () => {
-    if (updateBanner) updateBanner.hidden = true;
+    if (!availableRelease) return;
+    deferredRelease = availableRelease;
+    remember(deferredReleaseKey, deferredRelease);
+    renderUpdate();
   });
 
-  navigator.serviceWorker?.addEventListener("controllerchange", () => {
-    // Activation is possible only after a user accepts the waiting worker.
-    // Reload every controlled tab once so no tab keeps an older UI bundle.
-    if (updateReloadStarted) return;
-    updateReloadStarted = true;
-    window.location.reload();
+  navigator.serviceWorker?.addEventListener("controllerchange", checkRelease);
+  window.addEventListener("storage", async (event) => {
+    if (event.key === deferredReleaseKey) renderUpdate();
+    if (event.key === appliedReleaseKey && event.newValue !== pageRelease) {
+      await checkRelease();
+      if (availableRelease && availableRelease === event.newValue) reloadOnce();
+    }
   });
+  window.addEventListener("pageshow", checkRelease);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) checkRelease();
+  });
+  if (updateBanner) {
+    checkRelease();
+    window.setInterval(() => { if (!document.hidden) checkRelease(); }, 60000);
+  }
 
   enableButton?.addEventListener("click", async () => {
     enableButton.disabled = true;

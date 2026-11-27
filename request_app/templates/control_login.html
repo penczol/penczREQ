@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#080d16">
   <title>penczREQ Control</title>
   <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}" type="image/svg+xml">
-  <link rel="stylesheet" href="{{ url_for('static', path='/control.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/control.css') }}?v={{ release_id | urlencode }}">
 </head>
 <body class="control-auth">
   <main class="control-auth-shell">

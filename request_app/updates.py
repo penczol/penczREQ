@@ -12,6 +12,8 @@ def notify_users_about_update(
     admin_body: str,
     public_body_en: str | None = None,
     admin_body_en: str | None = None,
+    *,
+    release_id: str | None = None,
 ) -> int:
     inserted = 0
     with db.transaction() as conn:
@@ -25,7 +27,7 @@ def notify_users_about_update(
                 WHERE user_id = ? AND type = 'app_update' AND release_version = ?
                 LIMIT 1
                 """,
-                (user["id"], version),
+                (user["id"], release_id or version),
             ).fetchone()
             if exists:
                 continue
@@ -46,7 +48,7 @@ def notify_users_about_update(
                  event_key, event_payload_json, created_at)
                 VALUES (?, 'app_update', ?, ?, NULL, ?, 'app.update', ?, ?)
                 """,
-                (user["id"], title, body, version, encode_event_payload(payload), utc_now()),
+                (user["id"], title, body, release_id or version, encode_event_payload(payload), utc_now()),
             )
             inserted += 1
     return inserted

@@ -19,7 +19,7 @@ function defaultNotification(language = "en") {
 }
 
 self.addEventListener("install", () => {
-  // The worker handles push only. Authenticated pages, API responses and posters
+  // The page compares build identities independently of this push-only worker. Authenticated pages, API responses and posters
   // deliberately remain network-only and are never copied to Cache Storage.
   // This also prevents one signed-in account from exposing data to another one.
 });

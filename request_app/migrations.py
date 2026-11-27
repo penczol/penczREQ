@@ -15,6 +15,8 @@ from .auth_protection import LoginProtection
 from .repository import Repository
 from .control_store import ControlStore
 from .database import Database
+from .changelog import update_notification_bodies
+from .updates import notify_users_about_update
 
 SCHEMA_VERSION = 2
 # Official numbered images are immutable. UAT builds also have distinct versions.
@@ -274,6 +276,14 @@ def coordinate(settings, release=RELEASE):
                 audit.emit("password_policy_upgrade_required", severity="warning",
                            details={"accounts": upgraded, "minimum_length": 15})
             validate_pair(paths, installation)
+            if row["origin"] != "fresh":
+                # Both stores are backed up and writers excluded until ready.
+                # Recovery restores these inbox entries with the rest of the pair.
+                version = release.partition("@")[0]
+                notify_users_about_update(
+                    app_db, version, *update_notification_bodies(version, "pl"),
+                    *update_notification_bodies(version, "en"), release_id=release,
+                )
         except Exception:
             if row["origin"] != "fresh":
                 recover(journal, run, folder, paths, hashes)

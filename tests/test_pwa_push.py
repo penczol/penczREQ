@@ -77,7 +77,7 @@ def test_manifest_service_worker_and_favicon_are_wired():
     assert "registration.update().catch" in pwa
     assert "WORKER_UPDATE_INTERVAL_MS" in pwa
     assert 'navigator.serviceWorker?.addEventListener("controllerchange"' in pwa
-    assert 'registration.waiting.postMessage({ type: "ACTIVATE_UPDATE" })' in pwa
+    assert 'workerRegistration.waiting.postMessage({ type: "ACTIVATE_UPDATE" })' in pwa
     assert "window.__penczreqPwaInitialized" in pwa
     assert "if (updateReloadStarted) return" in pwa
     assert "@media (max-width: 600px)" in css

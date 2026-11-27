@@ -39,8 +39,8 @@ def test_assets_are_cache_busted_and_mobile_layout_is_preserved():
     index = (ROOT / "request_app" / "templates" / "index.html").read_text(encoding="utf-8")
     css = (ROOT / "request_app" / "static" / "v030.css").read_text(encoding="utf-8")
     assert "v030.css" in base
-    assert "?v={{ app_version }}" in base
-    assert "?v={{ app_version }}" in index
+    assert "?v={{ release_id | urlencode }}" in base
+    assert "?v={{ release_id | urlencode }}" in index
     assert "@media (max-width: 680px)" in css
     assert "display: contents" in css
 

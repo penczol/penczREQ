@@ -139,9 +139,10 @@ nadal nie został empirycznie zweryfikowany dla penczREQ.
 Instalacja i Web Push wymagają bezpiecznego kontekstu HTTPS, poza wyjątkiem
 `localhost`. Zwykły HTTP w LAN nadal obsługuje aplikację, lecz nie gwarantuje
 PWA/Push na innym urządzeniu. PWA pozostaje klientem sieciowym: nie cache'uje
-prywatnych widoków, API, plakatów ani danych konta do pracy offline. Aktualizacja
-service workera wymaga kontrolowanego odświeżenia zaakceptowanego przez
-użytkownika. penczREQ nie używa TWA, osobnego APK ani wrappera.
+prywatnych widoków, API, plakatów ani danych konta do pracy offline. Baner porównuje build wyświetlonej strony z buildem serwera. „Później”
+odkłada dany build również w innych kartach tego samego profilu. „Odśwież”
+wczytuje bieżący interfejs w otwartych kartach ze starszym buildem. Zwykłe
+odświeżenie strony również kończy komunikat. Worker odpowiada za Web Push. penczREQ nie używa TWA, osobnego APK ani wrappera.
 
 Źródła wsparcia platform: [WebKit — Web Push dla aplikacji ekranu początkowego
 iOS/iPadOS 16.4+](https://webkit.org/blog/13878/web-push-for-web-apps-on-ios-and-ipados/)

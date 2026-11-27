@@ -18,7 +18,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .migrations import coordinate, writer_session, writer_thread
+from .migrations import RELEASE, coordinate, writer_session, writer_thread
 from . import __version__
 from .audit import SecurityAudit
 from .auth_protection import LoginProtection, client_scope
@@ -159,6 +159,7 @@ def page_context(request: Request, **extra: Any) -> dict[str, Any]:
         "control_user": {"username": user["username"]} if user else None,
         "csrf_token": user["csrf_token"] if user else "",
         "app_version": APP_VERSION,
+        "release_id": RELEASE,
         "app_env": settings.app_env,
         "language": request.state.language,
         "t": translator(request.state.language),

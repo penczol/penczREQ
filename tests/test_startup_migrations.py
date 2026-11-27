@@ -113,6 +113,50 @@ class StartupMigrationTests(unittest.TestCase):
         with self.assertRaises(m.MigrationError), m.writer_session(self.cfg, "A"):
             pass
 
+    def test_release_notice_follows_committed_build_transition(self):
+        first, second, third = ("0.5.2@" + value for value in ("first", "second", "third"))
+        m.coordinate(self.cfg, first)
+        db = m.Database(self.paths[0])
+
+        def add_user(username):
+            with db.transaction() as conn:
+                conn.execute("INSERT INTO users(username,password_hash,role,created_at) "
+                             "VALUES (?, 'test', 'user', CURRENT_TIMESTAMP)", (username,))
+
+        def notices():
+            with db.connect() as conn:
+                return [tuple(r) for r in conn.execute(
+                    "SELECT release_version,event_payload_json FROM notifications "
+                    "WHERE type='app_update' ORDER BY id")]
+
+        add_user("first-account")
+        m.coordinate(self.cfg, first)
+        self.assertEqual(notices(), [])
+        m.coordinate(self.cfg, second)
+        [(build, payload)] = notices()
+        self.assertEqual(build, second)
+        self.assertEqual(json.loads(payload)["version"], "0.5.2")
+        with db.transaction() as conn:
+            conn.execute("DELETE FROM notifications")
+        add_user("later-account")
+        # Same image with a new process or a missing readiness file.
+        m.ready_path(self.cfg).unlink()
+        m.coordinate(self.cfg, second)
+        self.assertEqual(notices(), [])
+
+        # A failure after inbox insertion, before ready, restores the old pair.
+        original = m.notify_users_about_update
+        def fail_after_insert(*args, **kwargs):
+            original(*args, **kwargs)
+            raise RuntimeError("simulated failure")
+        with patch.object(m, "notify_users_about_update", fail_after_insert), self.assertRaises(RuntimeError):
+            m.coordinate(self.cfg, third)
+        self.assertEqual(notices(), [])
+        (self.cfg.control_data_dir / ".retry-migration-3").touch()
+        m.coordinate(self.cfg, third)
+        m.coordinate(self.cfg, third)
+        self.assertEqual([build for build, _ in notices()], [third, third])
+
     def test_legacy_requires_stopped_handover_and_preserves_old_schema(self):
         m.Database(self.paths[0]).initialize()
         m.ControlStore(self.paths[1], self.cfg.control_session_secret).initialize()

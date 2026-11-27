@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="{{ language }}">
+<html lang="{{ language }}" data-release="{{ release_id }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,21 +7,21 @@
   <meta name="theme-color" content="#0b111a">
   {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
   <title>{% block title %}{{ t("Requesty") }}{% endblock %}</title>
-  <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}?v={{ app_version }}" type="image/svg+xml">
-  <link rel="alternate icon" href="{{ url_for('static', path='/icons/favicon-32.png') }}?v={{ app_version }}" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/pwa-192.png') }}?v={{ app_version }}">
+  <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}?v={{ release_id | urlencode }}" type="image/svg+xml">
+  <link rel="alternate icon" href="{{ url_for('static', path='/icons/favicon-32.png') }}?v={{ release_id | urlencode }}" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/pwa-192.png') }}?v={{ release_id | urlencode }}">
   <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
-  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v02.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v021.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v021-phone.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v030.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v032.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v033.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v035.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v039.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v0310.css') }}?v={{ app_version }}">
-  <link rel="stylesheet" href="{{ url_for('static', path='/v0311.css') }}?v={{ app_version }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v02.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v021.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v021-phone.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v030.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v032.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v033.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v035.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v039.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v0310.css') }}?v={{ release_id | urlencode }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='/v0311.css') }}?v={{ release_id | urlencode }}">
 </head>
 <body class="{% if user %}{% if is_admin %}admin-view{% else %}user-view{% endif %}{% endif %}">
   <div class="shell">
@@ -141,8 +141,8 @@
   {% endif %}
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
   <div id="i18n-config" data-language="{{ language }}" data-strict="{{ '1' if app_env != 'production' else '0' }}" data-translations="{{ client_translations | tojson | forceescape }}" hidden></div>
-  <script src="{{ url_for('static', path='/common.js') }}?v={{ app_version }}" defer></script>
-  <script src="{{ url_for('static', path='/pwa.js') }}?v={{ app_version }}" defer></script>
+  <script src="{{ url_for('static', path='/common.js') }}?v={{ release_id | urlencode }}" defer></script>
+  <script src="{{ url_for('static', path='/pwa.js') }}?v={{ release_id | urlencode }}" defer></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

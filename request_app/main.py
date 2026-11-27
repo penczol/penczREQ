@@ -17,12 +17,12 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .migrations import writer_session, writer_thread
+from .migrations import RELEASE, writer_session, writer_thread
 from . import __version__
 from .config import Settings, load_settings
 from .audit import SecurityAudit
 from .auth_protection import LoginProtection
-from .changelog import changelog_for, update_notification_bodies
+from .changelog import changelog_for
 from .database import Database
 from .http_security import (
     AllowedHostsMiddleware,
@@ -47,7 +47,7 @@ from .repository import Repository, RepositoryError
 from .secure_config import SecureConfigError, SecureConfigStore
 from .security import create_session, delete_other_sessions, delete_session, get_session_user, prune_expired_sessions
 from .tmdb import TMDBClient, TMDBError
-from .updates import notify_upcoming_request, notify_users_about_update
+from .updates import notify_upcoming_request
 
 
 APP_VERSION = __version__
@@ -137,16 +137,6 @@ async def serving():
     else:
         repo.enforce_roles(settings.public_admin_username, settings.public_admin_bootstrap_password)
     push_service.initialize()
-    public_update, admin_update = update_notification_bodies(APP_VERSION, "pl")
-    public_update_en, admin_update_en = update_notification_bodies(APP_VERSION, "en")
-    notify_users_about_update(
-        db,
-        APP_VERSION,
-        public_update,
-        admin_update,
-        public_update_en,
-        admin_update_en,
-    )
     repo.promote_due_requests()
     tasks = [
         asyncio.create_task(release_loop()),
@@ -188,7 +178,9 @@ async def add_user_to_request(request: Request, call_next):
         secure=settings.cookie_secure,
         no_store=request.url.path in {"/login", "/force-password"},
     )
-    if request.url.path == "/service-worker.js":
+    if request.url.path == "/api/release":
+        response.headers["Cache-Control"] = "no-store"
+    elif request.url.path == "/service-worker.js":
         response.headers["Cache-Control"] = "no-cache"
     elif request.url.path.startswith("/static/icons/"):
         response.headers["Cache-Control"] = "public, max-age=86400"
@@ -216,6 +208,7 @@ def page_context(request: Request, **extra: Any) -> dict[str, Any]:
         "csrf_token": user["csrf_token"] if user else "",
         "app_env": settings.app_env,
         "app_version": APP_VERSION,
+        "release_id": RELEASE,
         "language": request.state.language,
         "t": translator(request.state.language),
         "client_translations": client_translations(request.state.language),
@@ -428,6 +421,11 @@ async def web_manifest(request: Request):
         manifest_document(request.state.language),
         media_type="application/manifest+json",
     )
+
+
+@app.get("/api/release", include_in_schema=False)
+async def current_release():
+    return {"release": RELEASE}
 
 
 @app.get("/service-worker.js", include_in_schema=False)

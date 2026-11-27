@@ -38,7 +38,7 @@ RUN python -m pip install --no-cache-dir --requirement requirements.txt \
               /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12
 COPY --chown=568:568 request_app ./request_app
 
-RUN printf '%s\n' "${BUILD_ID:-$VCS_REF}" > request_app/_build_revision
+RUN printf '%s\n' "${BUILD_ID:-$VCS_REF-$(cat /proc/sys/kernel/random/uuid)}" > request_app/_build_revision
 
 USER 568:568
 EXPOSE 8000 8001
