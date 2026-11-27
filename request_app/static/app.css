@@ -207,6 +207,10 @@ select:focus, input:focus, textarea:focus { border-color: var(--accent); box-sha
 .search-form { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; padding: 18px 20px; }
 .search-form label, .stack-form label { display: grid; gap: 6px; color: #c3cbd8; font-size: 11px; font-weight: 700; }
 .search-results { display: grid; gap: 8px; padding: 0 20px 22px; }
+#search-pages:not([hidden]) { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 12px; }
+#search-pages .button { min-height: 44px; min-width: 44px; }
+#search-status { margin: 0 20px 12px; }
+#search-status:empty { margin: 0; }
 .search-result { min-width: 0; display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 13px; padding: 10px; border: 1px solid var(--line-soft); border-radius: 13px; background: rgba(23,29,39,.75); }
 .search-result > img, .search-poster-empty { width: 74px; height: 111px; border-radius: 8px; object-fit: cover; }
 .search-poster-empty { display: grid; place-items: center; color: #657083; background: var(--surface-3); text-align: center; font-size: 9px; }

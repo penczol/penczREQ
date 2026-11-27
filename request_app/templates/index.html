@@ -26,9 +26,15 @@
 <dialog id="search-dialog" class="modal">
   <div class="modal-head"><h2>{{ t("Znajdź film lub serial") }}</h2><button class="icon-button" type="button" data-close-dialog aria-label="{{ t('Zamknij') }}">×</button></div>
   <form id="search-form" class="search-form">
-    <label>{{ t("Tytuł") }}<input type="search" name="query" minlength="2" placeholder="{{ t('Tytuł polski lub oryginalny') }}" required autofocus></label>
+    <label>{{ t("Tytuł") }}<input type="search" name="query" minlength="2" maxlength="100" placeholder="{{ t('Tytuł polski lub oryginalny') }}" required autofocus></label>
     <button class="button primary" type="submit">{{ t("Szukaj") }}</button>
   </form>
+  <p id="search-status" role="status"></p>
+  <nav id="search-pages" aria-label="{{ t('Strony wyników TMDB') }}" hidden>
+    <button class="button" type="button" data-search-prev aria-label="{{ t('Poprzednia strona') }}">‹</button>
+    <span data-search-page></span>
+    <button class="button" type="button" data-search-next aria-label="{{ t('Następna strona') }}">›</button>
+  </nav>
   <div id="search-results" class="search-results"></div>
 </dialog>
 

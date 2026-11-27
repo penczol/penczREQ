@@ -11,6 +11,7 @@ import httpx
 
 
 TMDB_API = "https://api.themoviedb.org/3"
+TMDB_MAX_PAGE = 500  # TMDB API error 22
 TMDB_IMAGE = "https://image.tmdb.org/t/p/w342"
 TMDB_IMAGE_LARGE = "https://image.tmdb.org/t/p/w500"
 logger = logging.getLogger(__name__)
@@ -140,6 +141,10 @@ class TMDBClient:
         )
 
     async def _get(self, path: str, **params: Any) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=25, transport=self._transport) as client:
+            return await self._get_json(client, path, **params)
+
+    async def _get_json(self, client: httpx.AsyncClient, path: str, **params: Any) -> dict[str, Any]:
         endpoint = f"{TMDB_API}{path}"
         response: httpx.Response | None = None
         try:
@@ -149,14 +154,9 @@ class TMDBClient:
             raise
         token = headers["Authorization"].removeprefix("Bearer ")
         try:
-            async with httpx.AsyncClient(
-                timeout=25,
-                headers=headers,
-                transport=self._transport,
-            ) as client:
-                response = await client.get(endpoint, params=params)
-                response.raise_for_status()
-                return response.json()
+            response = await client.get(endpoint, headers=headers, params=params)
+            response.raise_for_status()
+            return response.json()
         except httpx.HTTPStatusError as exc:
             self._log_failure(endpoint, exc, token=token, response=exc.response)
             if exc.response.status_code in {401, 403}:
@@ -228,14 +228,16 @@ class TMDBClient:
             pl_physical_date=earliest(poland, (5,)),
         )
 
-    async def _enrich_search_item(self, item: dict[str, Any], semaphore: asyncio.Semaphore) -> dict[str, Any]:
-        language = str(item.pop("_request_language", "pl"))
+    async def _enrich_search_item(
+        self, client: httpx.AsyncClient, item: dict[str, Any], language: str, semaphore: asyncio.Semaphore,
+    ) -> dict[str, Any]:
         tmdb_language = self._tmdb_language(language)
         media_type = item["media_type"]
         append = "credits" if media_type == "movie" else "aggregate_credits"
         try:
             async with semaphore:
-                details = await self._get(
+                details = await self._get_json(
+                    client,
                     f"/{media_type}/{item['id']}",
                     language=tmdb_language,
                     append_to_response=append,
@@ -244,7 +246,7 @@ class TMDBClient:
             details = {}
 
         date_value = item.get("release_date") if media_type == "movie" else item.get("first_air_date")
-        year = int(date_value[:4]) if date_value and len(date_value) >= 4 else None
+        year = self._year(date_value)
         title_localized = item.get("title") if media_type == "movie" else item.get("name")
         title_original = item.get("original_title") if media_type == "movie" else item.get("original_name")
         if media_type == "movie":
@@ -288,20 +290,20 @@ class TMDBClient:
         original_key = "original_title" if media_type == "movie" else "original_name"
         return details.get(key) or details.get(original_key) or NEUTRAL_TITLE_FALLBACK
 
-    async def search(self, query: str, language: str = "pl") -> list[dict[str, Any]]:
+    async def search(self, query: str, language: str = "pl", page: int = 1) -> dict[str, Any]:
         query = query.strip()
         if len(query) < 2:
-            return []
+            return {"items": [], "page": page, "total_pages": 0}
         language = "pl" if str(language).strip().lower() == "pl" else "en"
-        payload = await self._get(
-            "/search/multi", query=query, language=self._tmdb_language(language), include_adult="false", page=1
-        )
-        raw = [item for item in payload.get("results", []) if item.get("media_type") in {"movie", "tv"}]
-        raw = sorted(raw, key=lambda value: value.get("popularity", 0), reverse=True)[:15]
-        for item in raw:
-            item["_request_language"] = language
-        semaphore = asyncio.Semaphore(5)
-        return await asyncio.gather(*(self._enrich_search_item(item, semaphore) for item in raw))
+        async with httpx.AsyncClient(timeout=25, transport=self._transport) as client:
+            payload = await self._get_json(
+                client, "/search/multi", query=query, language=self._tmdb_language(language),
+                include_adult="false", page=page,
+            )
+            raw = [item for item in payload["results"] if item.get("media_type") in {"movie", "tv"}]
+            semaphore = asyncio.Semaphore(5)
+            items = await asyncio.gather(*(self._enrich_search_item(client, item, language, semaphore) for item in raw))
+        return {"items": items, "page": page, "total_pages": min(payload["total_pages"], TMDB_MAX_PAGE)}
 
     async def title_details(self, media_type: str, tmdb_id: int, language: str = "pl") -> dict[str, Any]:
         if media_type not in {"movie", "tv"}:

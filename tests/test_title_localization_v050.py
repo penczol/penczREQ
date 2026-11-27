@@ -148,6 +148,7 @@ async def test_tmdb_search_uses_active_ui_language(
                 200,
                 request=request,
                 json={
+                    "total_pages": 1,
                     "results": [
                         {
                             "id": 4935,
@@ -171,7 +172,7 @@ async def test_tmdb_search_uses_active_ui_language(
         tmp_path,
         transport=httpx.MockTransport(handler),
     )
-    item = (await client.search("zamek", language))[0]
+    item = (await client.search("zamek", language))["items"][0]
     expected_language = "pl-PL" if language == "pl" else "en-US"
     assert observed == [
         ("/3/search/multi", expected_language),

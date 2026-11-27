@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -46,7 +46,7 @@ from .rate_limit import SlidingWindowLimiter
 from .repository import Repository, RepositoryError
 from .secure_config import SecureConfigError, SecureConfigStore
 from .security import create_session, delete_other_sessions, delete_session, get_session_user, prune_expired_sessions
-from .tmdb import TMDBClient, TMDBError
+from .tmdb import TMDB_MAX_PAGE, TMDBClient, TMDBError
 from .updates import notify_upcoming_request
 
 
@@ -660,12 +660,15 @@ class ProxySettingsBody(BaseModel):
 
 
 @app.get("/api/tmdb/search")
-async def api_tmdb_search(q: str, request: Request, user=Depends(require_user)):
+async def api_tmdb_search(
+    q: str, request: Request, page: Annotated[int, Query(ge=1, le=TMDB_MAX_PAGE)] = 1,
+    user=Depends(require_user),
+):
     query = q.strip()
     if len(query) < 2 or len(query) > 100:
         raise RepositoryError("Wyszukiwana fraza musi mieć 2–100 znaków.")
     enforce_rate_limit("tmdb-search", f"{user['id']}:{client_ip(request)}", limit=30, window_seconds=60)
-    return {"items": await tmdb.search(query, request.state.language)}
+    return await tmdb.search(query, request.state.language, page)
 
 
 @app.get("/api/tmdb/{media_type}/{tmdb_id}")

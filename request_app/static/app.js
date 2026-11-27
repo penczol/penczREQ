@@ -16,6 +16,14 @@
   const searchDialog = document.querySelector("#search-dialog");
   const searchForm = document.querySelector("#search-form");
   const searchResults = document.querySelector("#search-results");
+  const searchPages = document.querySelector("#search-pages");
+  const searchStatus = document.querySelector("#search-status");
+  const previousPage = searchPages.querySelector("[data-search-prev]");
+  const nextPage = searchPages.querySelector("[data-search-next]");
+  let searchQuery = "";
+  let searchPage = 0;
+  let searchTotalPages = 0;
+  let pendingSearch = null;
   const deleteDialog = document.querySelector("#delete-dialog");
   const deleteForm = document.querySelector("#delete-form");
   const states = { active: [], upcoming: [], completed: [] };
@@ -479,6 +487,8 @@
   });
 
   document.querySelector("[data-open-search]")?.addEventListener("click", () => {
+    searchStatus.textContent = "";
+    searchPages.hidden = true;
     searchResults.innerHTML = `<div class="search-welcome"><strong>${tr("Wyszukiwarka TMDB")}</strong><p>${tr("Wpisz polski lub oryginalny tytuł filmu albo serialu.")}</p></div>`;
     searchForm.reset(); searchDialog.showModal(); setTimeout(() => searchForm.elements.query.focus(), 50);
   });
@@ -501,15 +511,46 @@
     </article>`;
   }
 
-  searchForm.addEventListener("submit", async (event) => {
-    event.preventDefault(); const submit = searchForm.querySelector('[type="submit"]'); submit.disabled = true;
-    searchResults.innerHTML = `<div class="loading-state"><span></span><p>${tr("Pobieranie tytułów, twórców i obsady z TMDB…")}</p></div>`;
+  async function loadSearchPage(page) {
+    pendingSearch?.abort();
+    const controller = new AbortController();
+    pendingSearch = controller;
+    previousPage.disabled = nextPage.disabled = true;
+    searchStatus.textContent = tr("Pobieranie tytułów, twórców i obsady z TMDB…");
     try {
-      const result = await api(`/api/tmdb/search?q=${encodeURIComponent(searchForm.elements.query.value.trim())}`);
-      searchResults.innerHTML = result.items.length ? result.items.map(searchResultMarkup).join("") : `<div class="empty-small">${tr("Nie znaleziono pasujących filmów ani seriali.")}</div>`;
-    } catch (error) { searchResults.innerHTML = `<div class="empty-small error">${escapeHtml(error.message)}</div>`; }
-    finally { submit.disabled = false; }
+      const params = new URLSearchParams({ q: searchQuery, page });
+      const result = await api(`/api/tmdb/search?${params}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      searchPage = result.page;
+      searchTotalPages = result.total_pages;
+      searchPages.hidden = searchTotalPages <= 1;
+      const summary = tr("Strona {page} z {pages}", { page: searchPage, pages: searchTotalPages });
+      searchPages.querySelector("[data-search-page]").textContent = summary;
+      searchResults.innerHTML = result.items.map(searchResultMarkup).join("");
+      searchStatus.textContent = result.items.length ? "" : (searchTotalPages > 1
+        ? tr("Na tej stronie nie ma filmów ani seriali.") : tr("Nie znaleziono pasujących filmów ani seriali."));
+    } catch (error) {
+      if (!controller.signal.aborted) searchStatus.textContent = error.message;
+    } finally {
+      if (!controller.signal.aborted) {
+        previousPage.disabled = searchPage <= 1;
+        nextPage.disabled = searchPage >= searchTotalPages;
+        pendingSearch = null;
+      }
+    }
+  }
+
+  searchForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    searchQuery = searchForm.elements.query.value.trim();
+    searchPage = searchTotalPages = 0;
+    searchPages.hidden = true;
+    searchResults.replaceChildren();
+    loadSearchPage(1);
   });
+  previousPage.addEventListener("click", () => loadSearchPage(searchPage - 1));
+  nextPage.addEventListener("click", () => loadSearchPage(searchPage + 1));
+  searchDialog.addEventListener("close", () => pendingSearch?.abort());
 
   async function addRequest(button, mediaType, tmdbId, seasonNumber = null) {
     button.disabled = true; const previous = button.textContent; button.textContent = tr("Dodawanie…");
