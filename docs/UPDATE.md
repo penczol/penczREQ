@@ -71,6 +71,30 @@ numbered manifest by digest to the channel and reads its digest back.
    under an existing numbered tag stops publication. Resume a failed publish
    from the sealed candidate while it is available.
 
+## Image risk decision of 27 November 2026
+
+The operator approved 53 specific Debian CVE/package pairs for CI and isolated
+UAT on the reviewed linux/amd64 base. The list in
+`security/trivy-image-baseline.json` records the source scan and versions.
+The review retained 44 existing pairs, added nine and retired ten after fixes.
+All 53 findings were HIGH and lacked a fix in Trixie at review time.
+
+The three SQLite exceptions (CVE-2026-119373, -119374 and -119379) assume
+trusted legacy databases and private backup pairs. Public and Control do not
+use FTS5 tables or import binary changesets. The two OpenSSL exceptions
+(CVE-2026-107494 and -124709) assume TCP application listeners and clients
+without QUIC. The deployment runs unprivileged with private data mounts.
+Reassess changes to these assumptions, schema, input sources or privileges.
+Backup hashes confirm consistency with the journal. Operators must also
+establish the provenance of files supplied for manual recovery.
+
+**Review on 1 December 2026 and before publishing a release.** Check current
+Debian fixes and compare a fresh image scan with the reviewed pairs. Install
+available fixes and retire resolved exceptions. A new or returning pair, a
+fixable HIGH/CRITICAL finding or increased severity blocks promotion. The
+operator must separately approve any expansion. This UAT decision grants
+no production release approval.
+
 ## Production and permanent UAT
 
 Production follows `:stable`. The permanent test installation follows `:uat`.
