@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
-import sqlite3
+from contextlib import closing
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
+from .sqlite_access import open_database
 from .database import Database, utc_now
 
 
@@ -15,16 +16,13 @@ class MaintenanceError(RuntimeError):
 def _backup_one(source_path: Path, target_path: Path) -> None:
     temporary = target_path.with_suffix(target_path.suffix + ".tmp")
     temporary.unlink(missing_ok=True)
-    source = sqlite3.connect(source_path, timeout=30)
-    destination = sqlite3.connect(temporary, timeout=30)
-    try:
-        source.backup(destination)
-        result = str(destination.execute("PRAGMA quick_check").fetchone()[0])
-        if result != "ok":
-            raise MaintenanceError(f"Kontrola kopii {source_path.name} nie powiodła się: {result}")
-    finally:
-        destination.close()
-        source.close()
+    with closing(open_database(source_path, "ro", timeout=30)) as source:
+        with closing(open_database(temporary, "rwc", timeout=30)) as destination:
+            source.backup(destination)
+            destination.execute("PRAGMA journal_mode=DELETE")
+            result = str(destination.execute("PRAGMA quick_check").fetchone()[0])
+            if result != "ok":
+                raise MaintenanceError(f"Kontrola kopii {source_path.name} nie powiodła się: {result}")
     os.replace(temporary, target_path)
 
 
@@ -96,7 +94,7 @@ def list_backups(backups_dir: Path) -> list[dict]:
 def integrity_report(db: Database, control_database_path: Path) -> dict[str, str]:
     report = {"app": db.quick_check()}
     if control_database_path.exists():
-        conn = sqlite3.connect(control_database_path, timeout=10)
+        conn = open_database(control_database_path, "ro", timeout=10)
         try:
             report["control"] = str(conn.execute("PRAGMA quick_check").fetchone()[0])
         finally:

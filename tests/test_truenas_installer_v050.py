@@ -18,11 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INSTALLER_PATH = ROOT / "deploy" / "truenas" / "installer.py"
 TEMPLATE_PATH = ROOT / "deploy" / "truenas" / "compose.yaml.example"
 
-SPEC = importlib.util.spec_from_file_location("penczreq_truenas_installer", INSTALLER_PATH)
-assert SPEC and SPEC.loader
-installer = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = installer
-SPEC.loader.exec_module(installer)
+from deploy.truenas import installer
 
 BUILDER_PATH = ROOT / "tools" / "build_installer.py"
 BUILDER_SPEC = importlib.util.spec_from_file_location("penczreq_installer_builder", BUILDER_PATH)
@@ -563,9 +559,46 @@ def test_fresh_files_create_separate_0600_env_and_refuse_reuse(monkeypatch, tmp_
         installer._fresh_files(config)
 
 
+@pytest.fixture
+def frozen_fixture(monkeypatch, tmp_path):
+    """Emulate only ZFS commands, mount metadata and the tmpfs location."""
+    from deploy.truenas import sqlite_snapshot
+    import shutil
+    commands = []
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setattr(sqlite_snapshot.os, "ST_RDONLY", 1, raising=False)
+    monkeypatch.setattr(sqlite_snapshot.os, "statvfs", lambda path: SimpleNamespace(f_flag=1), raising=False)
+    original_tmp = sqlite_snapshot.tempfile.TemporaryDirectory
+    monkeypatch.setattr(sqlite_snapshot.tempfile, "TemporaryDirectory", lambda **kw: original_tmp(dir=scratch))
+
+    def mount(args, **kwargs):
+        if args[-1] == "/dev/shm":
+            return "tmpfs"
+        root = Path(args[-1])
+        return "zfs " + answers()["root_dataset"] + "/" + root.parents[2].name + "@" + root.name
+    monkeypatch.setattr(sqlite_snapshot.subprocess, "check_output", mount)
+
+    def run(command, **kwargs):
+        commands.append(command)
+        name = command[-1].split("@")[1]
+        for component in ("app", "control"):
+            directory = tmp_path / component
+            snap = directory / ".zfs" / "snapshot" / name
+            if command[1] == "snapshot":
+                snap.mkdir(parents=True)
+                for path in directory.glob("*.db*"):
+                    shutil.copyfile(path, snap / path.name)
+            else:
+                shutil.rmtree(snap)
+        return SimpleNamespace(stdout="", returncode=0)
+    monkeypatch.setattr(installer, "_run", run)
+    return commands
+
+
 @pytest.mark.usefixtures("no_root_chown")
 def test_upgrade_preserves_secrets_and_creates_checked_pair_backup_and_snapshot(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, frozen_fixture
 ):
     config = installer.InstallConfig.from_mapping(answers(mode="upgrade"))
     monkeypatch.setattr(installer.InstallConfig, "root_path", property(lambda self: tmp_path))
@@ -585,13 +618,7 @@ def test_upgrade_preserves_secrets_and_creates_checked_pair_backup_and_snapshot(
         f"CONTROL_SESSION_SECRET={'c' * 48}\nCONFIG_ENCRYPTION_KEY={shared_key}\n",
         encoding="utf-8",
     )
-    commands = []
-
-    def fake_run(command, **kwargs):
-        commands.append(command)
-        return SimpleNamespace(stdout="", returncode=0)
-
-    monkeypatch.setattr(installer, "_run", fake_run)
+    commands = frozen_fixture
 
     installer._upgrade_files(config)
     marker = installer._prepare_upgrade_rollback(config)
@@ -603,7 +630,10 @@ def test_upgrade_preserves_secrets_and_creates_checked_pair_backup_and_snapshot(
     assert public["CONFIG_ENCRYPTION_KEY"] == shared_key
     assert control["CONFIG_ENCRYPTION_KEY"] == shared_key
     assert public["SESSION_DAYS"] == "180"
-    assert [command[:3] for command in commands] == [["zfs", "snapshot", "-r"]]
+    assert [command[:3] for command in commands] == [
+        ["zfs", "snapshot", "-r"], ["zfs", "destroy", "-r"], ["zfs", "snapshot", "-r"]
+    ]
+    assert commands[0][-1] == commands[1][-1] != commands[2][-1]
     assert marker["source_integrity"]["app"]["quick_check"] == "ok"
     assert marker["source_integrity"]["control"]["foreign_key_violations"] == 0
     for backup in marker["backups"].values():
@@ -612,6 +642,49 @@ def test_upgrade_preserves_secrets_and_creates_checked_pair_backup_and_snapshot(
     rollback = Path(next(iter(marker["backups"].values()))).parent / "ROLLBACK.json"
     assert rollback.is_file()
     assert shared_key not in rollback.read_text(encoding="utf-8")
+
+
+def test_installer_only_opens_scratch_and_preserves_wal_commits(frozen_fixture, monkeypatch, tmp_path):
+    from contextlib import ExitStack, closing
+    config = installer.InstallConfig.from_mapping(answers())
+    monkeypatch.setattr(installer.InstallConfig, "root_path", property(lambda self: tmp_path))
+    with ExitStack() as stack:
+        for name in ("app", "control"):
+            folder = tmp_path / name
+            folder.mkdir()
+            conn = stack.enter_context(closing(installer.sqlite3.connect(folder / (name + ".db"))))
+            assert conn.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+            conn.executescript("CREATE TABLE requests(title_en); INSERT INTO requests VALUES ('wal commit');")
+        def metadata():
+            return {p: (p.stat().st_uid, p.stat().st_gid, p.stat().st_mode, p.stat().st_mtime_ns,
+                        hashlib.sha256(p.read_bytes()).hexdigest())
+                    for component in ("app", "control") for p in (tmp_path / component).glob("*.db*")}
+        before = metadata()
+        original = installer.sqlite3.connect
+        def private_connection(path, *args, **kwargs):
+            assert "scratch" in str(path)
+            return original(path, *args, **kwargs)
+        monkeypatch.setattr(installer.sqlite3, "connect", private_connection)
+        (tmp_path / "backups").mkdir()
+        marker = installer._prepare_upgrade_rollback(config)
+        installer._wait_for_post_start_databases(config, timeout_seconds=0)
+        assert metadata() == before
+        for backup in marker["backups"].values():
+            with closing(original(Path(backup).as_uri() + "?immutable=1", uri=True)) as db:
+                assert db.execute("SELECT title_en FROM requests").fetchall() == [("wal commit",)]
+        assert not list((tmp_path / "scratch").iterdir())
+
+
+def test_missing_snapshot_input_cleans_only_own_snapshot(frozen_fixture, monkeypatch, tmp_path):
+    config = installer.InstallConfig.from_mapping(answers())
+    monkeypatch.setattr(installer.InstallConfig, "root_path", property(lambda self: tmp_path))
+    for name in ("app", "control"):
+        (tmp_path / name).mkdir()
+    with pytest.raises(installer.InstallerError):
+        installer._wait_for_post_start_databases(config, timeout_seconds=0)
+    assert [cmd[1] for cmd in frozen_fixture] == ["snapshot", "destroy"]
+    assert frozen_fixture[0][-1] == frozen_fixture[1][-1]
+    assert not list((tmp_path / "scratch").iterdir())
 
 
 def test_running_state_passes_on_first_check_without_sleep(monkeypatch):
@@ -794,7 +867,7 @@ def test_app_start_failure_stops_before_database_and_success_result(
 
 
 def test_post_start_database_gate_requires_title_en_and_checks_both_databases(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, frozen_fixture
 ):
     config = installer.InstallConfig.from_mapping(answers())
     monkeypatch.setattr(

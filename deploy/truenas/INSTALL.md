@@ -292,6 +292,8 @@ portów, kont i plików env. W Public ustaw WEB_PUSH_DELIVERY=disabled. Oba
 kanały używają Apps → Update. Osobny migrator obsługuje zmiany wymagające
 interwencji operatora, np. nowego montowania lub niedostępnego klucza.
 
+Kontrole baz przy `--execute` wymagają miejsca w `/dev/shm` na prywatne kopie obu baz razem z WAL lub dziennikiem, a przy aktualizacji także na eksport kopii. Instalator używa jednej rekurencyjnej migawki ZFS i sprawdza, czy każdy plik pochodzi z właściwej migawki dziecka. Nowa próba gotowości pobiera nową migawkę. Migawka rollbacku i zweryfikowana para kopii pozostają dostępne po aktualizacji.
+
 ### Uprawnienia stałej instancji UAT pod udziałem SMB
 
 1. W **Datasets** sprawdź punkt montowania rodzica, typ ACL, ACL Mode oraz

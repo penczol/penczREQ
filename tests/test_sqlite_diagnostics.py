@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tools import diagnose_sqlite_snapshot as diag
+from deploy.truenas import sqlite_snapshot as diag
 
 
 def test_live_directory_is_rejected_before_open(tmp_path):
@@ -52,3 +52,56 @@ def test_snapshot_diagnostics_keeps_wal_only_commits_without_writing_input(tmp_p
     assert report == {"app/app.db": {"schema": 2}, "control/control.db": {"schema": 2},
                       "control/.migrations.db": {"run": 1, "release": "build", "phase": "ready"}}
     assert files() == before and not list(scratch.iterdir())
+
+
+def test_unexpected_dataset_is_rejected_before_sqlite(tmp_path, monkeypatch):
+    root = tmp_path / ".zfs" / "snapshot" / "sample"
+    root.mkdir(parents=True)
+    (root / "app.db").touch()
+    monkeypatch.setattr(diag.subprocess, "check_output", lambda *a, **kw: "zfs pool/other@sample")
+    with pytest.raises(ValueError, match="dataset"):
+        diag.copy_database(root, "app.db", tmp_path, "pool/fixture/app")
+
+
+def test_foreign_uid_is_rejected_before_opening_even_a_readonly_connection(tmp_path, monkeypatch):
+    from request_app import sqlite_access
+    path = tmp_path / "app.db"
+    path.touch()
+    monkeypatch.setattr(sqlite_access.os, "geteuid", lambda: path.stat().st_uid + 1, raising=False)
+    with patch.object(sqlite3, "connect", side_effect=AssertionError("opened live file")), pytest.raises(PermissionError):
+        sqlite_access.open_database(path, "ro")
+    assert list(tmp_path.iterdir()) == [path]
+
+
+def test_runtime_integrity_does_not_change_journal_mode_or_create_a_missing_db(tmp_path):
+    from request_app.database import Database
+    from request_app.maintenance import integrity_report, _backup_one
+    path = tmp_path / "app.db"
+    with closing(sqlite3.connect(path)) as connection:
+        connection.execute("CREATE TABLE preserved(value)")
+    original = path.read_bytes()
+    assert integrity_report(Database(path), tmp_path / "control.db") == {"app": "ok"}
+    assert path.read_bytes() == original
+    with pytest.raises(sqlite3.OperationalError):
+        _backup_one(tmp_path / "missing.db", tmp_path / "backup.db")
+    assert list(tmp_path.iterdir()) == [path]
+
+def test_snapshot_mount_triggers_lazy_zfs_mount_before_findmnt(tmp_path, monkeypatch):
+    root = tmp_path / ".zfs" / "snapshot" / "lazy"
+    root.mkdir(parents=True)
+    child = root / "app.db"
+    child.touch()
+    from pathlib import Path
+    original_lstat = Path.lstat
+    mounted = False
+    def lookup(path):
+        nonlocal mounted
+        if path == child:
+            mounted = True
+        return original_lstat(path)
+    monkeypatch.setattr(Path, "lstat", lookup)
+    monkeypatch.setattr(diag.subprocess, "check_output", lambda *a, **kw:
+                        "zfs pool/fixture@lazy" if mounted else "zfs pool/fixture")
+    monkeypatch.setattr(diag.os, "ST_RDONLY", 1, raising=False)
+    monkeypatch.setattr(diag.os, "statvfs", lambda path: SimpleNamespace(f_flag=1), raising=False)
+    assert diag.snapshot_mount(root, "app.db", "pool/fixture") == root

@@ -9,6 +9,7 @@ import sqlite3
 from contextlib import closing, contextmanager
 from pathlib import Path
 
+from .sqlite_access import open_database
 from . import __version__
 from .audit import SecurityAudit
 from .auth_protection import LoginProtection
@@ -52,7 +53,7 @@ def write_json(path, value):
 def gate(directory, *, exclusive=False):
     # A separate, rollback-journal SQLite file supplies OS process locks on
     # Windows and Linux. Do not enable WAL on this file or unlink it.
-    with closing(sqlite3.connect(directory / ".runtime-lock", timeout=5, isolation_level=None)) as conn:
+    with closing(open_database(directory / ".runtime-lock", "rwc", timeout=5, isolation_level=None)) as conn:
         conn.execute("BEGIN EXCLUSIVE" if exclusive else "BEGIN")
         conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
         yield
@@ -90,7 +91,7 @@ def digest(path):
 
 @contextmanager
 def database(path, mode):
-    with closing(sqlite3.connect(path.resolve().as_uri() + "?mode=" + mode, uri=True, timeout=5)) as conn:
+    with closing(open_database(path, mode, timeout=5)) as conn:
         yield conn
 
 

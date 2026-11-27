@@ -1,0 +1,97 @@
+"""Inspect copies of the three databases from one immutable TrueNAS ZFS snapshot."""
+import argparse
+from contextlib import closing
+import json
+import os
+from pathlib import Path
+import shutil
+import sqlite3
+import stat
+import subprocess
+import tempfile
+
+
+DATABASES = ("app/app.db", "control/control.db", "control/.migrations.db")
+
+
+def snapshot_root(root):
+    root = Path(root).absolute()
+    if root.resolve(strict=True) != root or root.parent.name != "snapshot" or root.parent.parent.name != ".zfs":
+        raise ValueError("Expected the canonical root of a named ZFS snapshot")
+    return root
+
+
+def snapshot_mount(root, relative, expected_dataset=None):
+    root = snapshot_root(root)
+    # OpenZFS materializes the snapshot mount on lookup of a child; stat(root) alone
+    # can still report the live dataset containing the automount directory.
+    (root / relative).lstat()
+    mount = subprocess.check_output(["findmnt", "-n", "-o", "FSTYPE,SOURCE", "-T", str(root)],
+                                    text=True).split()
+    if len(mount) != 2 or mount[0] != "zfs" or not mount[1].endswith("@" + root.name):
+        raise ValueError("Expected a mounted ZFS snapshot of this name")
+    if expected_dataset is not None and mount[1] != expected_dataset + "@" + root.name:
+        raise ValueError("Unexpected snapshot dataset")
+    if not os.statvfs(root).f_flag & os.ST_RDONLY:
+        raise ValueError("Snapshot must be mounted read-only")
+    return root
+
+
+def private_scratch():
+    if subprocess.check_output(["findmnt", "-n", "-o", "FSTYPE", "-T", "/dev/shm"],
+                               text=True).strip() != "tmpfs":
+        raise ValueError("Private scratch space must be on tmpfs")
+    return tempfile.TemporaryDirectory(dir="/dev/shm", prefix="penczreq-diag-")
+
+
+def copy_database(root, relative, scratch, expected_dataset=None):
+    if relative not in DATABASES + ("app.db", "control.db"):
+        raise ValueError("Unexpected SQLite file")
+    root = snapshot_mount(root, relative, expected_dataset)
+    source = root / relative
+    local = Path(scratch) / source.name
+    for suffix in ("", "-wal", "-journal"):
+        part = source.with_name(source.name + suffix)
+        if suffix and not part.exists() and not part.is_symlink():
+            continue
+        if part.resolve(strict=True) != part or not stat.S_ISREG(part.stat().st_mode):
+            raise ValueError(f"Unexpected input: {relative}{suffix}")
+        if part.stat().st_dev != root.stat().st_dev:
+            raise ValueError("Database and journals must belong to the verified snapshot")
+        shutil.copyfile(part, local.with_name(local.name + suffix))
+    return local
+
+
+def inspect_snapshot(root):
+    root = snapshot_root(root)
+    results = {}
+    with private_scratch() as scratch:
+        for relative in DATABASES:
+            local = copy_database(root, relative, scratch)
+            # Recovery, WAL index creation and any checkpoint are confined to tmpfs.
+            with closing(sqlite3.connect(local.as_uri() + "?mode=rw", uri=True)) as db:
+                if db.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+                    raise ValueError(f"Integrity check failed in {relative}")
+                if db.execute("PRAGMA foreign_key_check").fetchone():
+                    raise ValueError(f"Foreign key check failed in {relative}")
+                if local.name == ".migrations.db":
+                    run, release, phase = db.execute(
+                        "SELECT id, target, phase FROM runs ORDER BY id DESC LIMIT 1"
+                    ).fetchone()
+                    installation, = db.execute("SELECT id FROM installation").fetchone()
+                    results[relative] = dict(run=run, release=release, phase=phase)
+                else:
+                    name, identity = db.execute("SELECT name, installation FROM penczreq_component").fetchone()
+                    if name != local.stem:
+                        raise ValueError(f"Unexpected component identity for {relative}")
+                    results[relative] = dict(schema=db.execute("PRAGMA user_version").fetchone()[0],
+                                             installation=identity)
+        if any(results[name].pop("installation") != installation for name in DATABASES[:2]):
+            raise ValueError("Components belong to different installations")
+    return results
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("snapshot_root", type=Path)
+    print(json.dumps(inspect_snapshot(parser.parse_args().snapshot_root), indent=2))

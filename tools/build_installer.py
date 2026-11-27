@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "deploy" / "truenas"
 FILES = (
     "installer.py",
+    "sqlite_snapshot.py",
     "install.sh",
     "compose.yaml.example",
     "answers.example.json",

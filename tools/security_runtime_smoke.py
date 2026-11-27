@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
-import sqlite3
+from contextlib import closing
 import sys
 import tempfile
 from pathlib import Path
@@ -263,9 +263,10 @@ def run() -> None:
         logs = "\n".join(path.read_text(encoding="utf-8") for path in (data_dir / "logs").glob("*.jsonl"))
         for secret in (PUBLIC_START, PUBLIC_FINAL, CONTROL_START, CONTROL_FINAL, TMDB_SENTINEL):
             require(secret not in logs, "Sekret wyciekł do dziennika bezpieczeństwa.")
-        with sqlite3.connect(data_dir / "app.db") as conn:
+        from request_app.sqlite_access import open_database
+        with closing(open_database(data_dir / "app.db", "ro")) as conn:
             require(conn.execute("PRAGMA quick_check").fetchone()[0] == "ok", "Baza app.db jest uszkodzona.")
-        with sqlite3.connect(data_dir / "control" / "control.db") as conn:
+        with closing(open_database(data_dir / "control" / "control.db", "ro")) as conn:
             require(conn.execute("PRAGMA quick_check").fetchone()[0] == "ok", "Baza control.db jest uszkodzona.")
 
         print(json.dumps({"status": "ok", "checks": "public+control+csrf+reauth+secrets+backups+integrity+tmdb+requests+pl-en"}))

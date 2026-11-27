@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from .sqlite_access import open_database
 from .i18n import normalize_language
 
 from .security import (
@@ -93,7 +94,7 @@ class ControlStore:
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.path, timeout=10, isolation_level=None)
+        conn = open_database(self.path, "rwc", timeout=10, isolation_level=None)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")

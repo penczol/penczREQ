@@ -3,9 +3,13 @@ from __future__ import annotations
 import ipaddress
 import os
 import sqlite3
+from contextlib import closing
+
 from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
 from pathlib import Path
+
+from .sqlite_access import open_database
 
 
 AUTO_TRUST_RUNTIME_GATEWAY_ENV = "AUTO_TRUST_RUNTIME_GATEWAY"
@@ -235,8 +239,7 @@ def _read_public_manual_proxies(database_path: Path) -> tuple[str, str | None]:
     if not database_path.is_file():
         return "", None
     try:
-        uri = f"{database_path.resolve().as_uri()}?mode=ro"
-        with sqlite3.connect(uri, uri=True, timeout=1.0) as connection:
+        with closing(open_database(database_path, "ro", timeout=1.0)) as connection:
             row = connection.execute(
                 "SELECT value FROM app_settings WHERE key = 'known_proxies'"
             ).fetchone()

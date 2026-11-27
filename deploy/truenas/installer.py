@@ -20,6 +20,7 @@ import string
 import subprocess
 import sys
 import time
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -477,7 +478,7 @@ def _ensure_truenas_runtime() -> None:
         encoding="utf-8", errors="replace"
     ):
         raise InstallerError("Ten instalator jest przeznaczony dla TrueNAS SCALE 25.10.x.")
-    for command in ("midclt", "docker", "zfs", "runuser"):
+    for command in ("midclt", "docker", "zfs", "runuser", "findmnt"):
         if not shutil.which(command):
             raise InstallerError(f"Brak wymaganej komendy TrueNAS: {command}")
 
@@ -534,95 +535,88 @@ def _ensure_datasets(config: InstallConfig) -> None:
             raise InstallerError(f"Pozostał plik testu zapisu: {probe}")
 
 
-def _database_report(path: Path) -> dict[str, Any]:
-    if not path.is_file():
-        raise InstallerError(f"Brak wymaganej bazy: {path}")
-    uri = f"file:{path.as_posix()}?mode=ro"
-    with sqlite3.connect(uri, uri=True) as connection:
-        quick = str(connection.execute("PRAGMA quick_check").fetchone()[0])
-        foreign = connection.execute("PRAGMA foreign_key_check").fetchall()
-    if quick != "ok" or foreign:
+@contextmanager
+def _frozen_databases(config: InstallConfig):
+    if __package__:
+        from . import sqlite_snapshot
+    else:  # Executing the extracted installer archive on TrueNAS.
+        import sqlite_snapshot
+
+    name = "penczreq-check-" + secrets.token_hex(12)
+    snapshot = f"{config.root_dataset}@{name}"
+    _run(["zfs", "snapshot", "-r", snapshot])
+    try:
+        with sqlite_snapshot.private_scratch() as scratch:
+            paths = {}
+            for component in ("app", "control"):
+                root = config.root_path / component / ".zfs" / "snapshot" / name
+                paths[component] = sqlite_snapshot.copy_database(
+                    root, component + ".db", scratch, config.root_dataset + "/" + component
+                )
+            yield paths
+    finally:
+        _run(["zfs", "destroy", "-r", snapshot])
+
+
+def _database_report(connection, path, *, require_schema=False):
+    if connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]:
         raise InstallerError(f"Baza {path} nie przeszła kontroli integralności.")
-    return {"path": str(path), "quick_check": quick, "foreign_key_violations": 0}
-
-
-def _application_schema_report(path: Path) -> dict[str, Any]:
-    report = _database_report(path)
-    uri = f"file:{path.as_posix()}?mode=ro"
-    missing: dict[str, list[str]] = {}
-    with sqlite3.connect(uri, uri=True) as connection:
+    if connection.execute("PRAGMA foreign_key_check").fetchone():
+        raise InstallerError(f"Baza {path} zawiera niespójne klucze obce.")
+    report = {"path": str(path), "quick_check": "ok", "foreign_key_violations": 0}
+    if require_schema:
         for table, required in REQUIRED_APP_SCHEMA_COLUMNS.items():
-            existing = {
-                str(row[1]) for row in connection.execute(f"PRAGMA table_info({table})")
-            }
-            absent = sorted(required - existing)
-            if absent:
-                missing[table] = absent
-    if missing:
-        rendered = ", ".join(
-            f"{table}.{column}"
-            for table, columns in sorted(missing.items())
-            for column in columns
-        )
-        raise InstallerError(
-            f"Baza aplikacji nie osiągnęła schematu {VERSION}; brak: {rendered}."
-        )
-    return {
-        **report,
-        "required_columns": {
-            table: sorted(columns)
-            for table, columns in sorted(REQUIRED_APP_SCHEMA_COLUMNS.items())
-        },
-    }
+            existing = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
+            if missing := sorted(required - existing):
+                raise InstallerError("Brak kolumn: " + ", ".join(f"{table}.{col}" for col in missing))
+        report["required_columns"] = {k: sorted(v) for k, v in REQUIRED_APP_SCHEMA_COLUMNS.items()}
+    return report
+
+
+def _inspect_pair(config, *, backup_root=None):
+    reports = {}
+    with _frozen_databases(config) as paths:
+        for name, local in paths.items():
+            # Only the disposable copy can be opened by SQLite as the host operator.
+            with closing(sqlite3.connect(local.as_uri() + "?mode=rw", uri=True)) as db:
+                label = config.root_path / name / local.name
+                reports[name] = _database_report(db, label, require_schema=backup_root is None and name == "app")
+                if backup_root is not None:
+                    export = local.with_suffix(".export")
+                    with closing(sqlite3.connect(export)) as output:
+                        db.backup(output)
+                        output.execute("PRAGMA journal_mode=DELETE")
+                        _database_report(output, export)
+                    destination = backup_root / local.name
+                    with export.open("rb") as src, destination.open("xb") as dst:
+                        os.chmod(destination, 0o600)
+                        shutil.copyfileobj(src, dst)
+                        dst.flush()
+                        os.fsync(dst.fileno())
+    return reports
 
 
 def _wait_for_post_start_databases(
     config: InstallConfig, *, timeout_seconds: float = 60.0, poll_seconds: float = 1.0
 ) -> dict[str, dict[str, Any]]:
     deadline = time.monotonic() + max(0.0, timeout_seconds)
-    last_error: Exception | None = None
     while True:
         try:
-            return {
-                "app": _application_schema_report(
-                    config.root_path / "app" / "app.db"
-                ),
-                "control": _database_report(
-                    config.root_path / "control" / "control.db"
-                ),
-            }
-        except (InstallerError, sqlite3.Error) as exc:
-            last_error = exc
-        if time.monotonic() >= deadline:
-            raise InstallerError(
-                f"Bazy po uruchomieniu {VERSION} nie osiągnęły oczekiwanego stanu: "
-                f"{last_error}"
-            ) from last_error
+            return _inspect_pair(config)
+        except (InstallerError, sqlite3.Error, FileNotFoundError) as exc:
+            if time.monotonic() >= deadline:
+                raise InstallerError(
+                    f"Bazy po uruchomieniu {VERSION} nie osiągnęły oczekiwanego stanu: {exc}"
+                ) from exc
         time.sleep(max(0.01, poll_seconds))
-
-
-def _backup_database(source: Path, destination: Path) -> None:
-    source_uri = f"file:{source.as_posix()}?mode=ro"
-    with sqlite3.connect(source_uri, uri=True) as input_db, sqlite3.connect(destination) as output_db:
-        input_db.backup(output_db)
-    os.chmod(destination, 0o600)
-    _database_report(destination)
 
 
 def _prepare_upgrade_rollback(config: InstallConfig) -> dict[str, Any]:
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     backup_root = config.root_path / "backups" / f"pre-{VERSION}-{timestamp}"
     backup_root.mkdir(mode=0o700)
-    sources = {
-        "app": config.root_path / "app" / "app.db",
-        "control": config.root_path / "control" / "control.db",
-    }
-    reports = {name: _database_report(path) for name, path in sources.items()}
-    backups: dict[str, str] = {}
-    for name, source in sources.items():
-        destination = backup_root / f"{name}.db"
-        _backup_database(source, destination)
-        backups[name] = str(destination)
+    reports = _inspect_pair(config, backup_root=backup_root)
+    backups = {name: str(backup_root / f"{name}.db") for name in reports}
     snapshot = f"{config.root_dataset}@pre-{VERSION}-{timestamp}"
     _run(["zfs", "snapshot", "-r", snapshot])
     marker = {

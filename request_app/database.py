@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from .sqlite_access import open_database
 from .notification_i18n import migrate_legacy_notifications
 
 
@@ -309,12 +310,12 @@ class Database:
                 )
 
     def quick_check(self) -> str:
-        with self.connect() as conn:
+        with contextlib.closing(open_database(self.path, "ro", timeout=10)) as conn:
             return str(conn.execute("PRAGMA quick_check").fetchone()[0])
 
     @contextlib.contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.path, timeout=10, isolation_level=None)
+        conn = open_database(self.path, "rwc", timeout=10, isolation_level=None)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("PRAGMA journal_mode = WAL")
