@@ -38,7 +38,9 @@ jobs:
           python -m pip install --requirement requirements-ci.txt
           python -m pip check
       - name: Run regression suite
-        run: python -m pytest -q
+        run: |
+          python -m pytest -q
+          python tools/security_runtime_smoke.py
       - name: Validate Python, JavaScript and shell sources
         run: |
           python -m compileall -q request_app tools tests

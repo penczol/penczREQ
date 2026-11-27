@@ -458,3 +458,7 @@ kontenerom dostępu do Docker/TrueNAS i nie usuwa historycznego stagingu. Nie
 publikuje obrazu ani repozytorium. Konfiguracja ownera GHCR, publikacja i
 migracja produkcyjna są oddzielnymi, kontrolowanymi krokami
 wydaniowymi/operacyjnymi.
+
+## Diagnostyka SQLite na działającym NAS-ie
+
+Do kontroli operatorskiej użyj [procedury odczytu z migawki ZFS](../../docs/DIAGNOSTYKA-SQLITE.md). Obejmuje ona Public, Control i dziennik migracji.

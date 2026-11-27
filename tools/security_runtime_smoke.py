@@ -44,6 +44,42 @@ def assert_headers(response) -> None:
     require("default-src 'self'" in response.headers.get("content-security-policy", ""), "Brak CSP.")
 
 
+def check_request_flow(public, main, csrf):
+    """Exercise the HTTP handlers with a deterministic TMDB response."""
+    import httpx
+    from unittest.mock import patch
+
+    def respond(request):
+        title = "Film testowy" if request.url.params.get("language") == "pl-PL" else "Test film"
+        movie = {"id": 125, "media_type": "movie", "title": title, "original_title": "Test film",
+                 "release_date": "2020-01-01"}
+        if request.url.path == "/3/search/multi":
+            return httpx.Response(200, json={"results": [movie], "total_pages": 2})
+        require(request.url.path == "/3/movie/125", "Unexpected fixture route")
+        return httpx.Response(200, json=movie)
+
+    client = main.TMDBClient("fixture", main.settings.posters_dir, transport=httpx.MockTransport(respond))
+    with patch.object(main, "tmdb", client):
+        for lang, title in (("en", "Test film"), ("pl", "Film testowy")):
+            changed = public.post("/language", data={"language": lang, "csrf_token": csrf})
+            require(changed.status_code == 303, "Language change failed")
+            response = public.get("/api/tmdb/search", params={"q": "test", "page": 2})
+            response.raise_for_status()
+            results = response.json()
+            require(results["page"] == 2 and results["total_pages"] == 2, "Pagination failed")
+            require(results["items"][0]["title_" + lang] == title, "Wrong search title")
+        headers = {"X-CSRF-Token": csrf}
+        movie = {"media_type": "movie", "tmdb_id": 125}
+        first = public.post("/api/requests", headers=headers, json=movie)
+        first.raise_for_status()
+        second = public.post("/api/requests", headers=headers, json=movie)
+        second.raise_for_status()
+        require(not first.json()["duplicate"] and second.json()["duplicate"], "Duplicate handling failed")
+        require(first.json()["id"] == second.json()["id"], "Duplicate produced another request")
+        items = public.get("/api/requests", params={"state": "active"}).json()["items"]
+        require(len(items) == 1 and items[0]["tmdb_id"] == 125, "Submitted movie missing")
+
+
 def run() -> None:
     from fastapi.testclient import TestClient
 
@@ -62,7 +98,11 @@ def run() -> None:
                 "COOKIE_SECURE": "false",
                 "ALLOWED_HOSTS": "testserver,127.0.0.1",
                 "CONTROL_ALLOWED_HOSTS": "testserver,127.0.0.1",
-                "CONTROL_ALLOWED_NETWORKS": "127.0.0.0/8,::1/128",
+                "CONTROL_ALLOWED_NETWORKS": "192.0.2.0/24",
+                "WEB_PUSH_DELIVERY": "disabled",
+                "CONTROL_DATA_DIR": str(data_dir / "control"),
+                "BACKUP_DIR": str(data_dir / "backups"),
+                "LOG_DIR": str(data_dir / "logs"),
                 "PUBLIC_ADMIN_USERNAME": "runtime-admin",
                 "PUBLIC_ADMIN_BOOTSTRAP_PASSWORD": PUBLIC_START,
                 "CONTROL_ADMIN_USERNAME": "runtime-control",
@@ -73,7 +113,9 @@ def run() -> None:
 
         from request_app import control, main
 
-        with TestClient(main.app, base_url="http://testserver", follow_redirects=False) as public:
+        client_options = {"base_url": "http://testserver", "follow_redirects": False,
+                          "client": ("192.0.2.1", 50000)}
+        with TestClient(control.app, **client_options) as panel, TestClient(main.app, **client_options) as public:
             login_page = public.get("/login")
             require(login_page.status_code == 200, "Publiczna strona logowania nie działa.")
             login_csrf = login_csrf_from_html(login_page.text)
@@ -119,7 +161,8 @@ def run() -> None:
             require(home.status_code == 200 and "runtime-admin" in home.text, "Publiczna sesja po zmianie hasła nie działa.")
             require(public.get("/api/control/users").status_code == 404, "Control przecieka do publicznego serwera.")
 
-        with TestClient(control.app, base_url="http://testserver", follow_redirects=False) as panel:
+            check_request_flow(public, main, csrf_from_html(home.text))
+
             login_page = panel.get("/login")
             require(login_page.status_code == 200, "Strona logowania Control nie działa.")
             login_csrf = login_csrf_from_html(login_page.text)
@@ -225,7 +268,7 @@ def run() -> None:
         with sqlite3.connect(data_dir / "control" / "control.db") as conn:
             require(conn.execute("PRAGMA quick_check").fetchone()[0] == "ok", "Baza control.db jest uszkodzona.")
 
-        print(json.dumps({"status": "ok", "checks": "public+control+csrf+reauth+secrets+backups+integrity"}))
+        print(json.dumps({"status": "ok", "checks": "public+control+csrf+reauth+secrets+backups+integrity+tmdb+requests+pl-en"}))
 
 
 if __name__ == "__main__":
