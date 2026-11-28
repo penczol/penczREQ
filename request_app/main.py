@@ -519,7 +519,8 @@ async def login(
     )
     set_language_cookie(response, user["language"])
     response.delete_cookie(ADMIN_VIEW_COOKIE, path="/")
-    response.delete_cookie("request_session", path="/")
+    if not IS_UAT:
+        response.delete_cookie("request_session", path="/")
     return response
 
 
@@ -538,7 +539,8 @@ async def logout(request: Request, csrf_token: Annotated[str, Form()] = ""):
     if user:
         set_language_cookie(response, user["language"])
     response.delete_cookie(COOKIE_NAME, path="/")
-    response.delete_cookie("request_session", path="/")
+    if not IS_UAT:
+        response.delete_cookie("request_session", path="/")
     response.delete_cookie(ADMIN_VIEW_COOKIE, path="/")
     return response
 

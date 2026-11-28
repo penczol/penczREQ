@@ -514,6 +514,9 @@ EN_BY_PL: dict[str, str] = {
     "Nieprawidłowy adres subskrypcji Web Push.": "Invalid Web Push subscription URL.",
     "Subskrypcja zawiera nieprawidłowe klucze.": "The subscription contains invalid keys.",
     "Ten dostawca Web Push nie jest dozwolony.": "This Web Push provider is not allowed.",
+    "Web Push UAT jest dostępny tylko dla konta testowego.": "UAT Web Push is available only to the test account.",
+    "Urządzenie jest już przypisane do innego konta.": "This device is already linked to another account.",
+    "Konto UAT ma już sparowane urządzenie.": "The UAT account already has a paired device.",
     "Osiągnięto limit urządzeń Web Push dla tego konta.": "The Web Push device limit for this account has been reached.",
     "Brak aktywnego administratora publicznego. Uruchom najpierw penczREQ Control i dokończ inicjalizację.": "No active public administrator. Start penczREQ Control first and complete initialization.",
 

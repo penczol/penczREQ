@@ -339,7 +339,9 @@ plan.
 
 ### Mobile PWA on the permanent UAT
 
-Use a dedicated HTTPS hostname reachable from both the LAN and the tailnet. Configure
+Use a dedicated HTTPS origin on a port bound to the LAN address. An IP address
+requires a certificate with an IP SAN. For Caddy internal TLS install only the
+public root certificate on the test phone and verify its SHA-256 fingerprint. Configure
 the Public service with `PENCZREQ_DEPLOYMENT=uat`, its HTTPS `APP_BASE_URL`,
 `PUBLIC_ACCESS_MODE=reverse-proxy`, an explicit host allowlist and secure cookies.
 Set `PENCZREQ_DEPLOYMENT=uat` on Control as well. Keep Control on its private binding.
@@ -356,6 +358,6 @@ Use `WEB_PUSH_DELIVERY=disabled` to stop delivery.
 
 Before applying a private proxy route, save the running Caddy configuration and
 validate the candidate with the installed Caddy binary. Restrict ingress using the
-network peer or a dedicated private listener. Check DNS and TLS from both networks,
+network peer or a dedicated private listener. Check the certificate and HTTPS from the LAN,
 the negative access path, and the unchanged production routes after a graceful reload.
 Keep the previous configuration available for immediate validation and reload.

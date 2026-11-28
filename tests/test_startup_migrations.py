@@ -176,7 +176,8 @@ class StartupMigrationTests(unittest.TestCase):
 
     def test_uat_does_not_deliver_notifications(self):
         from request_app.push import PushService
-        service = object.__new__(PushService)
+        service = PushService(m.Database(self.cfg.database_path), self.root / "test.pem",
+                              "mailto:test@example.invalid", deployment="uat")
         service._public_key = "fixture"
         with patch.dict(os.environ, WEB_PUSH_DELIVERY="disabled"):
             self.assertEqual(service.deliver_pending(sender=self.fail), 0)
