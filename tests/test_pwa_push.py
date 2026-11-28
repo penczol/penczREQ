@@ -12,6 +12,7 @@ from request_app.database import Database, utc_now
 from request_app.pwa import manifest_document
 from request_app.push import MAX_SUBSCRIPTIONS_PER_USER, PushService, validate_subscription
 from request_app.repository import Repository, RepositoryError
+from request_app.tmdb import MediaDetails
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -491,7 +492,7 @@ def test_uat_manifest_and_icons_are_distinct_on_the_same_build():
             assert struct.unpack(">II", data[16:24]) == (size, size)
 
 
-def test_uat_push_only_explicit_test_to_one_paired_device(tmp_path, monkeypatch):
+def test_uat_push_restricts_delivery_to_one_paired_device(tmp_path, monkeypatch):
     db, user, normal = make_service(tmp_path)
     other = Repository(db).create_user("other-device", "AnotherTestPassword99")
     endpoint = "https://fcm.googleapis.com/fcm/send/"
@@ -521,3 +522,45 @@ def test_uat_push_only_explicit_test_to_one_paired_device(tmp_path, monkeypatch)
     normal.save_subscription(user["id"], endpoint + "preexisting-second", P256DH, AUTH)
     service.create_test_notification(user["id"])
     assert service.deliver_pending(sender=capture) == 0
+
+
+def test_uat_request_status_and_completion_reach_webpush_once(tmp_path, monkeypatch):
+    from unittest.mock import Mock
+
+    db, author, existing = make_service(tmp_path)
+    repo = Repository(db)
+    repo.enforce_roles("admin", "TestAdminPassword123")
+    admin = repo.user_by_username("admin")
+    other = repo.create_user("reader", "AnotherTestPassword99")
+    endpoint = "https://fcm.googleapis.com/fcm/send/paired"
+    existing.save_subscription(other["id"], endpoint + "-other", P256DH, AUTH)
+    monkeypatch.setenv("UAT_PUSH_USERNAME", author["username"])
+    monkeypatch.setenv("WEB_PUSH_DELIVERY", "uat-test")
+    service = PushService(db, tmp_path / ".vapid-uat-private.pem", existing.subject, deployment="uat")
+    service.initialize()
+    service.save_subscription(author["id"], endpoint, P256DH, AUTH)
+    media = MediaDetails(
+        tmdb_id=42, media_type="movie", season_number=None, imdb_id=None,
+        title_pl="Film UAT", title_en="UAT movie", title_original="UAT movie",
+        release_year=2020, release_date="2020-01-01", original_language="en", poster_remote_path=None,
+    )
+    request_id, _, _ = repo.create_request(media, None, author["id"])
+    repo.toggle_like(request_id, other["id"])
+    repo.set_status(request_id, "in_progress")
+    repo.complete_request(request_id, admin["id"])
+
+    transport = Mock()
+    monkeypatch.setattr("request_app.push.webpush", transport)
+    assert service.deliver_pending() == 2
+    assert service.deliver_pending() == 0
+    assert transport.call_count == 2
+    with db.connect() as conn:
+        for call, event in zip(transport.call_args_list, ("request.status_changed", "request.completed"), strict=True):
+            args = call.kwargs
+            assert args["subscription_info"] == {"endpoint": endpoint, "keys": {"p256dh": P256DH, "auth": AUTH}}
+            assert args["vapid_private_key"] == str(service.private_key_path)
+            payload = json.loads(args["data"])
+            assert payload["uat"] and "UAT movie" in payload["body"]
+            row = conn.execute("SELECT event_key, user_id FROM notifications WHERE id=?",
+                               (payload["notification_id"],)).fetchone()
+            assert tuple(row) == (event, author["id"])

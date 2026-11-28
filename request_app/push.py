@@ -291,7 +291,8 @@ class PushService:
                  AND d.subscription_id = s.id
                 WHERE d.delivered_at IS NULL
                   AND COALESCE(d.attempts, 0) < ?
-                  AND (? = 0 OR (u.username = ? AND u.role = 'user' AND n.event_key = 'system.push_test'
+                  AND (? = 0 OR (u.username = ? AND u.role = 'user'
+                       AND n.event_key IN ('system.push_test', 'request.status_changed', 'request.completed')
                        AND (SELECT COUNT(*) FROM push_subscriptions WHERE user_id = u.id) = 1))
                 ORDER BY n.id, s.id
                 LIMIT ?

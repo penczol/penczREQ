@@ -352,8 +352,8 @@ The UAT manifest ID, launcher name, icons and Public cookie names are also disti
 UAT defaults to no delivery. To test a phone, create a fresh, non-admin UAT account,
 set `UAT_PUSH_USERNAME` to its login and `WEB_PUSH_DELIVERY=uat-test` on Public.
 UAT creates its own P-256 key in `.vapid-uat-private.pem`. Pair the phone first.
-Only explicit push tests addressed to that account and its single subscription can
-be sent. Disable the subscription on the original phone before replacing it.
+Push tests, request status changes and request completions can be delivered to
+that account’s single paired device. Disable the subscription on the original phone before replacing it.
 Use `WEB_PUSH_DELIVERY=disabled` to stop delivery.
 
 Before applying a private proxy route, save the running Caddy configuration and
