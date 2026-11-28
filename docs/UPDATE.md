@@ -336,3 +336,26 @@ candidates. A test database must have Web Push delivery isolated so no real
 subscriber receives a UAT notification. See
 [`../deploy/truenas/INSTALL.md`](../deploy/truenas/INSTALL.md) for the detailed
 plan.
+
+### Mobile PWA on the permanent UAT
+
+Use a dedicated HTTPS hostname reachable from both the LAN and the tailnet. Configure
+the Public service with `PENCZREQ_DEPLOYMENT=uat`, its HTTPS `APP_BASE_URL`,
+`PUBLIC_ACCESS_MODE=reverse-proxy`, an explicit host allowlist and secure cookies.
+Set `PENCZREQ_DEPLOYMENT=uat` on Control as well. Keep Control on its private binding.
+Use separate databases, session secrets and volumes. The same image defaults to
+the production identity. Browser storage and service worker scope are isolated by origin.
+The UAT manifest ID, launcher name, icons and Public cookie names are also distinct.
+
+UAT defaults to no delivery. To test a phone, create a fresh, non-admin UAT account,
+set `UAT_PUSH_USERNAME` to its login and `WEB_PUSH_DELIVERY=uat-test` on Public.
+UAT creates its own P-256 key in `.vapid-uat-private.pem`. Pair the phone first.
+Only explicit push tests addressed to that account and its single subscription can
+be sent. Disable the subscription on the original phone before replacing it.
+Use `WEB_PUSH_DELIVERY=disabled` to stop delivery.
+
+Before applying a private proxy route, save the running Caddy configuration and
+validate the candidate with the installed Caddy binary. Restrict ingress using the
+network peer or a dedicated private listener. Check DNS and TLS from both networks,
+the negative access path, and the unchanged production routes after a graceful reload.
+Keep the previous configuration available for immediate validation and reload.

@@ -177,6 +177,7 @@ class Settings:
     backup_retention_days: int
     max_request_body_bytes: int
     poster_max_bytes: int
+    deployment: str = "production"
 
     @property
     def database_path(self) -> Path:
@@ -196,11 +197,12 @@ class Settings:
 
     @property
     def vapid_private_key_path(self) -> Path:
-        return self.data_dir / ".vapid-private.pem"
+        return self.data_dir / (".vapid-uat-private.pem" if self.deployment == "uat" else ".vapid-private.pem")
 
     @property
     def public_cookie_name(self) -> str:
-        return "__Host-penczreq_session" if self.cookie_secure else "penczreq_session"
+        name = "penczreq_uat_session" if self.deployment == "uat" else "penczreq_session"
+        return "__Host-" + name if self.cookie_secure else name
 
     @property
     def control_cookie_name(self) -> str:
@@ -337,7 +339,12 @@ def load_settings() -> Settings:
                 "W produkcji CONTROL_ALLOWED_HOSTS musi zawierać konkretne hosty panelu."
             )
 
+    deployment = os.getenv("PENCZREQ_DEPLOYMENT", "production").strip().lower()
+    if deployment not in {"production", "uat"}:
+        raise RuntimeError("PENCZREQ_DEPLOYMENT must be production or uat")
+
     return Settings(
+        deployment=deployment,
         project_root=root,
         app_env=env,
         app_component=app_component,

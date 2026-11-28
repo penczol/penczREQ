@@ -5,17 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0b111a">
-  <title>{{ t("Logowanie — penczREQ") }}</title>
+  <title>{{ t("Logowanie — penczREQ") }}{% if is_uat %} · UAT{% endif %}</title>
   <link rel="icon" href="{{ url_for('static', path='/icons/favicon.svg') }}?v={{ release_id | urlencode }}" type="image/svg+xml">
   <link rel="alternate icon" href="{{ url_for('static', path='/icons/favicon-32.png') }}?v={{ release_id | urlencode }}" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="{{ url_for('static', path='/icons/pwa-192.png') }}?v={{ release_id | urlencode }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path=('/icons/uat-pwa-192.png' if is_uat else '/icons/pwa-192.png')) }}?v={{ release_id | urlencode }}">
+  {% if is_uat %}<meta name="apple-mobile-web-app-title" content="penczREQ UAT">{% endif %}
   <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials">
   <link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ release_id | urlencode }}">
   <link rel="stylesheet" href="{{ url_for('static', path='/v02.css') }}?v={{ release_id | urlencode }}">
 </head>
 <body class="login-wallpaper">
   <main class="bare-login">
-    <h1 class="visually-hidden">penczREQ</h1>
+    <h1{% if not is_uat %} class="visually-hidden"{% endif %}>penczREQ{% if is_uat %} UAT{% endif %}</h1>
     <form method="post" action="/login" class="bare-login-form" aria-label="{{ t('Logowanie') }}">
       <input type="hidden" name="login_csrf_token" value="{{ login_csrf_token }}">
       <label class="visually-hidden" for="login-username">{{ t("Login") }}</label>

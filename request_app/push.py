@@ -75,7 +75,9 @@ def validate_subscription(endpoint: str, p256dh: str, auth: str) -> tuple[str, s
 
 
 class PushService:
-    def __init__(self, db: Database, private_key_path: Path, subject: str):
+    def __init__(self, db: Database, private_key_path: Path, subject: str, *, deployment: str = "production"):
+        self.uat = deployment == "uat"
+        self.test_user = os.getenv("UAT_PUSH_USERNAME", "").strip().lower() if self.uat else ""
         self.db = db
         self.private_key_path = private_key_path
         self.subject = subject
@@ -142,6 +144,14 @@ class PushService:
                 "SELECT id, user_id FROM push_subscriptions WHERE endpoint = ?",
                 (endpoint,),
             ).fetchone()
+            if self.uat:
+                user = conn.execute("SELECT username, role, is_active FROM users WHERE id=?", (user_id,)).fetchone()
+                if not self.test_user or not user or user["username"] != self.test_user or user["role"] != "user" or not user["is_active"]:
+                    raise RepositoryError("Web Push UAT jest dostępny tylko dla konta testowego.")
+                if existing and existing["user_id"] != user_id:
+                    raise RepositoryError("Urządzenie jest już przypisane do innego konta.")
+                if conn.execute("SELECT 1 FROM push_subscriptions WHERE user_id=? AND endpoint<>?", (user_id, endpoint)).fetchone():
+                    raise RepositoryError("Konto UAT ma już sparowane urządzenie.")
             if existing:
                 transferred = int(existing["user_id"]) != user_id
                 if transferred:
@@ -281,10 +291,12 @@ class PushService:
                  AND d.subscription_id = s.id
                 WHERE d.delivered_at IS NULL
                   AND COALESCE(d.attempts, 0) < ?
+                  AND (? = 0 OR (u.username = ? AND u.role = 'user' AND n.event_key = 'system.push_test'
+                       AND (SELECT COUNT(*) FROM push_subscriptions WHERE user_id = u.id) = 1))
                 ORDER BY n.id, s.id
                 LIMIT ?
                 """,
-                (MAX_DELIVERY_ATTEMPTS, min(max(limit, 1), 500)),
+                (MAX_DELIVERY_ATTEMPTS, int(self.uat), self.test_user, min(max(limit, 1), 500)),
             ).fetchall()
         return [
             localized_notification(dict(row), row["language"])
@@ -376,14 +388,18 @@ class PushService:
         limit: int = 100,
         sender: Callable[[dict[str, Any], str], None] | None = None,
     ) -> int:
-        if os.getenv("WEB_PUSH_DELIVERY", "enabled") != "enabled" or not self._public_key:
+        required_mode = "uat-test" if self.uat else "enabled"
+        if self.uat and not self.test_user:
+            return 0
+        if os.getenv("WEB_PUSH_DELIVERY", "enabled") != required_mode or not self._public_key:
             return 0
         send = sender or self._send
         delivered = 0
         for item in self._pending_deliveries(limit):
             payload = json.dumps(
                 {
-                    "title": str(item["title"])[:100],
+                    "title": (("penczREQ UAT · " if self.uat else "") + str(item["title"]))[:100],
+                    "uat": self.uat,
                     "body": str(item["body"])[:1800],
                     "url": "/",
                     "tag": f"notification-{item['notification_id']}",

@@ -62,7 +62,7 @@ def test_manifest_service_worker_and_favicon_are_wired():
     assert "caches.open(" not in worker
     assert 'pl: "Masz nowe powiadomienie."' in worker
     assert "defaultNotification(payload?.language)" in worker
-    assert 'icon: "/static/icons/pwa-192.png"' in worker
+    assert '"/static/icons/pwa-192.png"' in worker
     assert 'badge: "/static/icons/notification-badge-96.png"' in worker
     assert 'badge: "/static/icons/badge-96.png"' not in worker
     assert "Notification.requestPermission()" in pwa
@@ -83,7 +83,7 @@ def test_manifest_service_worker_and_favicon_are_wired():
     assert "@media (max-width: 600px)" in css
     assert ".pwa-update-banner > div { display: grid; grid-template-columns: 1fr 1fr; }" in css
     assert '@app.get("/manifest.webmanifest"' in public_server
-    assert "manifest_document(request.state.language)" in public_server
+    assert "manifest_document(request.state.language, settings.deployment)" in public_server
 
 
 @pytest.mark.parametrize(
@@ -476,3 +476,48 @@ def test_push_endpoint_can_move_between_accounts_without_replaying_history(tmp_p
     payloads = []
     assert service.deliver_pending(sender=lambda _item, payload: payloads.append(payload)) == 1
     assert json.loads(payloads[0])["title"] == "Nowe"
+
+def test_uat_manifest_and_icons_are_distinct_on_the_same_build():
+    for language in ("pl", "en"):
+        normal = manifest_document(language)
+        test = manifest_document(language, "uat")
+        assert test["name"] == test["short_name"] == "penczREQ UAT"
+        assert normal["id"] == "/" and test["id"] == "/penczreq-uat"
+        assert test["scope"] == test["start_url"] == "/"
+        for icon in test["icons"]:
+            assert icon["src"].startswith("/static/icons/uat-")
+            size = int(icon["sizes"].split("x")[0])
+            data = (ROOT / "request_app" / icon["src"].lstrip("/")).read_bytes()
+            assert struct.unpack(">II", data[16:24]) == (size, size)
+
+
+def test_uat_push_only_explicit_test_to_one_paired_device(tmp_path, monkeypatch):
+    db, user, normal = make_service(tmp_path)
+    other = Repository(db).create_user("other-device", "AnotherTestPassword99")
+    endpoint = "https://fcm.googleapis.com/fcm/send/"
+    normal.save_subscription(other["id"], endpoint + "unrelated", P256DH, AUTH)
+    normal.create_test_notification(other["id"])
+    monkeypatch.setenv("UAT_PUSH_USERNAME", user["username"])
+    service = PushService(db, tmp_path / ".vapid-uat-private.pem", normal.subject, deployment="uat")
+    service.initialize()
+    assert service.public_key != normal.public_key
+    with pytest.raises(RepositoryError):
+        service.save_subscription(other["id"], endpoint + "wrong-account", P256DH, AUTH)
+    paired = service.save_subscription(user["id"], endpoint + "paired", P256DH, AUTH)
+    assert service.save_subscription(user["id"], endpoint + "paired", P256DH, AUTH) == paired
+    with pytest.raises(RepositoryError):
+        service.save_subscription(user["id"], endpoint + "second", P256DH, AUTH)
+    _create_notification(db, user["id"], title="ordinary event")
+    service.create_test_notification(user["id"])
+    calls = []
+    def capture(row, payload):
+        calls.append((row["subscription_id"], json.loads(payload)["uat"]))
+    monkeypatch.setenv("WEB_PUSH_DELIVERY", "enabled")
+    assert service.deliver_pending(sender=capture) == 0
+    monkeypatch.setenv("WEB_PUSH_DELIVERY", "uat-test")
+    assert normal.deliver_pending(sender=capture) == 0
+    assert service.deliver_pending(sender=capture) == 1
+    assert service.deliver_pending(sender=capture) == 0 and calls == [(paired, True)]
+    normal.save_subscription(user["id"], endpoint + "preexisting-second", P256DH, AUTH)
+    service.create_test_notification(user["id"])
+    assert service.deliver_pending(sender=capture) == 0

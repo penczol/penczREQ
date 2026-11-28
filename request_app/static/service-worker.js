@@ -46,7 +46,7 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(String(message.title || defaultNotification(message.language).title), {
       body: String(message.body || defaultNotification(message.language).body),
-      icon: "/static/icons/pwa-192.png",
+      icon: message.uat === true ? "/static/icons/uat-pwa-192.png" : "/static/icons/pwa-192.png",
       // Android renders `badge` as a monochrome small/status-bar icon. Keep it
       // separate from the full-colour PWA icon and transparent outside the mark.
       badge: "/static/icons/notification-badge-96.png",

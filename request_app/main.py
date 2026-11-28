@@ -56,6 +56,11 @@ LANGUAGE_COOKIE = "penczreq_language"
 LOGIN_CSRF_COOKIE = "penczreq_login_csrf"
 logger = logging.getLogger(__name__)
 settings: Settings = load_settings()
+IS_UAT = settings.deployment == "uat"
+if IS_UAT:
+    ADMIN_VIEW_COOKIE += "_uat"
+    LANGUAGE_COOKIE += "_uat"
+    LOGIN_CSRF_COOKIE += "_uat"
 COOKIE_NAME = settings.public_cookie_name
 db = Database(settings.database_path)
 repo = Repository(db)
@@ -64,11 +69,11 @@ audit = SecurityAudit(db, settings.logs_dir)
 login_protection = LoginProtection(db, audit)
 rate_limiter = SlidingWindowLimiter()
 tmdb = TMDBClient(secure_config.tmdb_token, settings.posters_dir, settings.poster_max_bytes)
-push_service = PushService(db, settings.vapid_private_key_path, settings.vapid_subject)
+push_service = PushService(db, settings.vapid_private_key_path, settings.vapid_subject, deployment=settings.deployment)
 auth_semaphore = asyncio.Semaphore(2)
 static_dir = Path(__file__).parent / "static"
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-templates.env.globals["changelog_for"] = changelog_for
+templates.env.globals.update(changelog_for=changelog_for, is_uat=IS_UAT)
 
 
 async def refresh_release_metadata() -> None:
@@ -418,7 +423,7 @@ async def poster(filename: str, user=Depends(require_user)):
 @app.get("/manifest.webmanifest", include_in_schema=False)
 async def web_manifest(request: Request):
     return JSONResponse(
-        manifest_document(request.state.language),
+        manifest_document(request.state.language, settings.deployment),
         media_type="application/manifest+json",
     )
 
